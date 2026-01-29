@@ -1,0 +1,657 @@
+"""
+OODA Loop Orchestrator - Main control loop for Project Sentinel.
+
+Implements the Observe-Orient-Decide-Act cycle for autonomous transient detection:
+- OBSERVE: Capture telescope images using ScopeSim
+- ORIENT: Process images through differencing pipeline
+- DECIDE: Ask Gemini AI to analyze and decide
+- ACT: Execute the agent's decision
+
+This module ties together all Phase 1-3 components.
+"""
+
+import os
+import sys
+import time
+import logging
+from pathlib import Path
+from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List, Tuple
+from enum import Enum
+
+import numpy as np
+
+# Add parent directory to path for imports when running as script
+_script_dir = Path(__file__).parent.parent
+if str(_script_dir) not in sys.path:
+    sys.path.insert(0, str(_script_dir))
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Local imports
+from src.simulation.universe import UniverseController, TransientType
+from src.simulation.telescope import TelescopeCamera, ObservationResult
+from src.simulation.weather import WeatherSystem, WeatherConditions
+from src.processing.differencer import ImageDifferencer, DiffResult
+from src.agent import (
+    SentinelAgent,
+    ContextManager,
+    ContextState,
+    AgentDecision,
+    WeatherContext,
+    create_initial_context
+)
+
+
+class LoopState(Enum):
+    """Current state of the OODA loop."""
+    INITIALIZING = "initializing"
+    OBSERVING = "observing"
+    ORIENTING = "orienting"
+    DECIDING = "deciding"
+    ACTING = "acting"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+@dataclass
+class LoopConfig:
+    """Configuration for the OODA loop."""
+    # Simulation settings
+    field_size: float = 10.0  # arcseconds
+    num_stars: int = 100
+    random_seed: int = 42
+    
+    # Timing
+    step_interval_hours: float = 0.5  # 30 minutes simulated time per iteration
+    max_iterations: int = 16  # Standard marathon length
+    real_time_delay: float = 2.0  # Seconds between iterations (for API rate limits)
+    
+    # Transient injection
+    auto_inject_transients: bool = True
+    num_transients: int = 3
+    
+    # Data paths
+    state_dir: str = "data/agent_state"
+    observation_dir: str = "data/observations"
+    
+    # Weather
+    seeing_mean: float = 1.0
+    cloud_mean: float = 0.2
+
+
+@dataclass
+class IterationResult:
+    """Result of a single OODA iteration."""
+    iteration: int
+    simulated_time: datetime
+    weather: WeatherConditions
+    decision: AgentDecision
+    num_candidates: int
+    num_detections: int
+    duration_seconds: float
+    error: Optional[str] = None
+
+
+@dataclass
+class MarathonResult:
+    """Summary of a complete marathon run."""
+    start_time: datetime
+    end_time: datetime
+    total_iterations: int
+    total_alerts_triggered: int
+    total_candidates_tracked: int
+    ground_truth_transients: int
+    detection_accuracy: Optional[float] = None
+    iterations: List[IterationResult] = field(default_factory=list)
+
+
+class OODALoop:
+    """
+    Main OODA loop orchestrator for Project Sentinel.
+    
+    Coordinates all components to run an autonomous observation marathon.
+    """
+    
+    def __init__(self, config: Optional[LoopConfig] = None):
+        """
+        Initialize the OODA loop.
+        
+        Args:
+            config: Loop configuration. Uses defaults if not provided.
+        """
+        self.config = config or LoopConfig()
+        
+        # Initialize state
+        self.state = LoopState.INITIALIZING
+        self.iteration = 0
+        self.reference_image: Optional[np.ndarray] = None
+        self.marathon_result: Optional[MarathonResult] = None
+        
+        # Create output directories
+        Path(self.config.state_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.config.observation_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Components (lazy initialized)
+        self._universe: Optional[UniverseController] = None
+        self._camera: Optional[TelescopeCamera] = None
+        self._weather: Optional[WeatherSystem] = None
+        self._differencer: Optional[ImageDifferencer] = None
+        self._agent: Optional[SentinelAgent] = None
+        self._context_manager: Optional[ContextManager] = None
+        self._context: Optional[ContextState] = None
+        
+        logger.info("OODALoop initialized with config:")
+        logger.info(f"  - Max iterations: {self.config.max_iterations}")
+        logger.info(f"  - Step interval: {self.config.step_interval_hours} hours")
+        logger.info(f"  - Auto inject transients: {self.config.auto_inject_transients}")
+    
+    def initialize(self) -> bool:
+        """
+        Initialize all components.
+        
+        Returns:
+            True if initialization successful, False otherwise.
+        """
+        logger.info("=" * 60)
+        logger.info("Initializing OODA Loop Components")
+        logger.info("=" * 60)
+        
+        try:
+            # 1. Initialize Universe
+            logger.info("1. Initializing UniverseController...")
+            self._universe = UniverseController(
+                field_size=self.config.field_size,
+                num_stars=self.config.num_stars,
+                random_seed=self.config.random_seed
+            )
+            logger.info(f"   ✓ Universe created with {self.config.num_stars} stars")
+            
+            # Inject transients if configured
+            if self.config.auto_inject_transients:
+                self._inject_transients()
+            
+            # 2. Initialize Telescope Camera
+            logger.info("2. Initializing TelescopeCamera...")
+            self._camera = TelescopeCamera()
+            if not self._camera.initialize():
+                raise RuntimeError("Failed to initialize telescope camera")
+            logger.info("   ✓ MICADO instrument loaded")
+            
+            # 3. Initialize Weather System
+            logger.info("3. Initializing WeatherSystem...")
+            self._weather = WeatherSystem(
+                seed=self.config.random_seed,
+                seeing_mean=self.config.seeing_mean,
+                cloud_mean=self.config.cloud_mean
+            )
+            logger.info("   ✓ Weather system ready")
+            
+            # 4. Initialize Image Differencer
+            logger.info("4. Initializing ImageDifferencer...")
+            self._differencer = ImageDifferencer(
+                sigma_threshold=4.0,  # Detection threshold
+                min_area=4,
+                max_candidates=50
+            )
+            logger.info("   ✓ Differencer configured")
+            
+            # 5. Initialize Agent
+            logger.info("5. Initializing SentinelAgent...")
+            self._agent = SentinelAgent()
+            if not self._agent.test_connection():
+                raise RuntimeError("Failed to connect to Gemini API")
+            logger.info("   ✓ Gemini connection verified")
+            
+            # 6. Initialize Context Manager
+            logger.info("6. Initializing ContextManager...")
+            self._context_manager = ContextManager(state_dir=self.config.state_dir)
+            logger.info("   ✓ Context manager ready")
+            
+            # 7. Capture reference image
+            logger.info("7. Capturing reference image...")
+            self.reference_image = self._capture_reference()
+            logger.info(f"   ✓ Reference image captured: {self.reference_image.shape}")
+            
+            # 8. Initialize context state
+            logger.info("8. Initializing context state...")
+            weather_conditions = self._weather.get_conditions()
+            weather_context = WeatherContext.from_weather_system(
+                seeing=weather_conditions.seeing,
+                cloud_extinction=weather_conditions.cloud_extinction
+            )
+            self._context = self._context_manager.initialize_context(
+                simulated_time=self._universe.current_time.isoformat(),
+                weather=weather_context
+            )
+            logger.info("   ✓ Context initialized")
+            
+            self.state = LoopState.PAUSED
+            logger.info("")
+            logger.info("=" * 60)
+            logger.info("✅ All components initialized successfully!")
+            logger.info("=" * 60)
+            return True
+            
+        except Exception as e:
+            logger.error(f"Initialization failed: {e}")
+            self.state = LoopState.ERROR
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _inject_transients(self):
+        """Inject random transients into the universe."""
+        import random
+        random.seed(self.config.random_seed + 100)  # Different seed for transients
+        
+        logger.info(f"   Injecting {self.config.num_transients} transients...")
+        
+        for i in range(self.config.num_transients):
+            # Random position within field
+            x = random.uniform(-self.config.field_size/2 * 0.8, self.config.field_size/2 * 0.8)
+            y = random.uniform(-self.config.field_size/2 * 0.8, self.config.field_size/2 * 0.8)
+            
+            # Random timing - first transient starts immediately, others staggered
+            if i == 0:
+                start_offset = 0.0  # First transient visible from start
+            else:
+                start_offset = random.uniform(0.5, 3.0)  # hours from now
+            duration = random.uniform(6.0, 12.0)  # hours
+            
+            # Random brightness
+            peak_mag = random.uniform(16.0, 19.0)  # Bright enough to detect
+            
+            # Random type
+            event_type = random.choice([
+                TransientType.SUPERNOVA_IA,
+                TransientType.SUPERNOVA_II,
+                TransientType.NOVA
+            ])
+            
+            self._universe.add_transient(
+                x=x, y=y,
+                start_offset_hours=start_offset,
+                duration_hours=duration,
+                peak_magnitude=peak_mag,
+                event_type=event_type
+            )
+            
+            logger.info(f"   - Transient {i+1}: {event_type.value} at ({x:.2f}, {y:.2f}), "
+                       f"peak mag={peak_mag:.1f}, starts in {start_offset:.1f}h")
+    
+    def _capture_reference(self) -> np.ndarray:
+        """Capture reference image (before any transients)."""
+        # Get source list (just static stars for reference)
+        source = self._universe.get_source_list_for_scopesim()
+        
+        # Capture observation
+        result = self._camera.observe(source)
+        
+        # Save reference
+        ref_path = Path(self.config.observation_dir) / "reference"
+        self._camera.save_observation(result, str(ref_path))
+        
+        return result.image_data
+    
+    def run_iteration(self) -> IterationResult:
+        """
+        Run a single OODA iteration.
+        
+        Returns:
+            IterationResult with details of this iteration.
+        """
+        start_time = time.time()
+        self.iteration += 1
+        
+        logger.info("")
+        logger.info(f"{'='*60}")
+        logger.info(f"ITERATION {self.iteration}: {self._universe.current_time.strftime('%H:%M:%S')}")
+        logger.info(f"{'='*60}")
+        
+        try:
+            # ============ OBSERVE ============
+            self.state = LoopState.OBSERVING
+            logger.info("📷 OBSERVE: Capturing current observation...")
+            
+            # Step time forward
+            self._universe.step_time(hours=self.config.step_interval_hours)
+            weather_conditions = self._weather.step(hours=self.config.step_interval_hours)
+            
+            # Apply weather to telescope
+            self._camera.set_seeing(weather_conditions.seeing)
+            self._camera.set_cloud_extinction(weather_conditions.cloud_extinction)
+            
+            # Capture observation
+            source = self._universe.get_source_list_for_scopesim()
+            observation = self._camera.observe(source)
+            current_image = observation.image_data
+            
+            logger.info(f"   Weather: seeing={weather_conditions.seeing:.2f}\", "
+                       f"clouds={weather_conditions.cloud_extinction:.2f}")
+            
+            # ============ ORIENT ============
+            self.state = LoopState.ORIENTING
+            logger.info("🔍 ORIENT: Processing difference image...")
+            
+            diff_result = self._differencer.process(
+                reference=self.reference_image,
+                current=current_image
+            )
+            
+            num_detections = len(diff_result.candidate_regions)
+            logger.info(f"   Detected {num_detections} candidate regions")
+            
+            # Save observation and diff
+            obs_path = Path(self.config.observation_dir) / f"iteration_{self.iteration:03d}"
+            self._camera.save_observation(observation, str(obs_path))
+            
+            # ============ DECIDE ============
+            self.state = LoopState.DECIDING
+            logger.info("🧠 DECIDE: Analyzing with Gemini...")
+            
+            # Update weather context
+            weather_context = WeatherContext.from_weather_system(
+                seeing=weather_conditions.seeing,
+                cloud_extinction=weather_conditions.cloud_extinction
+            )
+            # Create updated context with new weather
+            self._context = ContextState(
+                iteration=self._context.iteration,
+                simulated_time=self._context.simulated_time,
+                current_focus=self._context.current_focus,
+                weather=weather_context,
+                candidates=self._context.candidates,
+                alerts_triggered=self._context.alerts_triggered,
+                last_action_reasoning=self._context.last_action_reasoning,
+                total_observations=self._context.total_observations
+            )
+            
+            # Call agent
+            decision = self._agent.analyze_images(
+                reference=self.reference_image,
+                current=current_image,
+                diff_annotated=diff_result.annotated_image,
+                context=self._context
+            )
+            
+            logger.info(f"   Decision: {decision.action} (confidence: {decision.confidence:.2f})")
+            logger.info(f"   Reasoning: {decision.reasoning[:100]}...")
+            
+            # ============ ACT ============
+            self.state = LoopState.ACTING
+            logger.info("⚡ ACT: Executing decision...")
+            
+            # Update context based on decision
+            self._context = self._context_manager.update_context(
+                old_context=self._context,
+                decision=decision,
+                new_weather=weather_context,
+                new_simulated_time=self._universe.current_time.isoformat()
+            )
+            
+            # Save context
+            self._context_manager.save_context(self._context)
+            
+            # Act on decision
+            self._execute_action(decision)
+            
+            # Calculate duration
+            duration = time.time() - start_time
+            
+            # Log summary
+            num_candidates = len(decision.updated_candidates)
+            logger.info(f"   ✓ Iteration complete in {duration:.1f}s")
+            logger.info(f"   Tracking {num_candidates} candidates")
+            
+            # Check if alert was triggered
+            if decision.action == "trigger_alert":
+                logger.info(f"   🚨 ALERT TRIGGERED!")
+            
+            return IterationResult(
+                iteration=self.iteration,
+                simulated_time=self._universe.current_time,
+                weather=weather_conditions,
+                decision=decision,
+                num_candidates=num_candidates,
+                num_detections=num_detections,
+                duration_seconds=duration
+            )
+            
+        except Exception as e:
+            logger.error(f"Iteration {self.iteration} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            return IterationResult(
+                iteration=self.iteration,
+                simulated_time=self._universe.current_time,
+                weather=self._weather.get_conditions(),
+                decision=None,
+                num_candidates=0,
+                num_detections=0,
+                duration_seconds=time.time() - start_time,
+                error=str(e)
+            )
+    
+    def _execute_action(self, decision: AgentDecision):
+        """
+        Execute the agent's decision.
+        
+        Args:
+            decision: The decision from the agent.
+        """
+        if decision.action == "observe_again":
+            logger.info("   → Will re-observe current field")
+            # No action needed - next iteration will observe same field
+            
+        elif decision.action == "slew_to":
+            if decision.target_coordinates:
+                x, y = decision.target_coordinates
+                logger.info(f"   → Slewing to coordinates ({x:.2f}, {y:.2f})")
+                # In a real system, this would move the telescope
+                # For simulation, we could adjust the field center
+                
+        elif decision.action == "trigger_alert":
+            logger.info("   → 🚨 ALERT TRIGGERED!")
+            # In a real system, this would send notifications
+            # Log the alert for scoring
+            
+        elif decision.action == "wait":
+            logger.info("   → Waiting due to conditions")
+            # No action needed
+    
+    def run_marathon(self) -> MarathonResult:
+        """
+        Run a complete observation marathon.
+        
+        Returns:
+            MarathonResult with summary of the marathon.
+        """
+        logger.info("")
+        logger.info("=" * 70)
+        logger.info("    PROJECT SENTINEL - MARATHON OBSERVATION RUN    ")
+        logger.info("=" * 70)
+        logger.info("")
+        
+        start_time = datetime.now()
+        iterations = []
+        
+        try:
+            for i in range(self.config.max_iterations):
+                result = self.run_iteration()
+                iterations.append(result)
+                
+                if result.error:
+                    logger.warning(f"Iteration {i+1} had error: {result.error}")
+                
+                # Rate limiting delay
+                if i < self.config.max_iterations - 1:
+                    time.sleep(self.config.real_time_delay)
+            
+            end_time = datetime.now()
+            
+            # Calculate summary statistics
+            total_alerts = sum(
+                1 if (r.decision and r.decision.action == "trigger_alert") else 0
+                for r in iterations
+            )
+            
+            final_candidates = len(self._context.candidates) if self._context else 0
+            ground_truth = len(self._universe.get_ground_truth()["active_transients"])
+            
+            # Calculate detection accuracy
+            accuracy = None
+            if ground_truth > 0:
+                confirmed = sum(
+                    1 for c in self._context.candidates 
+                    if c.status == "CONFIRMED"
+                ) if self._context else 0
+                accuracy = confirmed / ground_truth
+            
+            marathon_result = MarathonResult(
+                start_time=start_time,
+                end_time=end_time,
+                total_iterations=len(iterations),
+                total_alerts_triggered=total_alerts,
+                total_candidates_tracked=final_candidates,
+                ground_truth_transients=ground_truth,
+                detection_accuracy=accuracy,
+                iterations=iterations
+            )
+            
+            self.marathon_result = marathon_result
+            self._print_marathon_summary(marathon_result)
+            
+            return marathon_result
+            
+        except KeyboardInterrupt:
+            logger.info("\n⚠️ Marathon interrupted by user")
+            self.state = LoopState.STOPPED
+            raise
+    
+    def _print_marathon_summary(self, result: MarathonResult):
+        """Print a summary of the marathon run."""
+        logger.info("")
+        logger.info("=" * 70)
+        logger.info("    MARATHON COMPLETE - SUMMARY    ")
+        logger.info("=" * 70)
+        logger.info("")
+        logger.info(f"Duration: {result.end_time - result.start_time}")
+        logger.info(f"Total iterations: {result.total_iterations}")
+        logger.info(f"Alerts triggered: {result.total_alerts_triggered}")
+        logger.info(f"Candidates tracked: {result.total_candidates_tracked}")
+        logger.info(f"Ground truth transients: {result.ground_truth_transients}")
+        
+        if result.detection_accuracy is not None:
+            logger.info(f"Detection accuracy: {result.detection_accuracy:.1%}")
+        
+        # Session summary from context manager
+        if self._context_manager:
+            summary = self._context_manager.get_session_summary()
+            logger.info("")
+            logger.info("Session details:")
+            for key, value in summary.items():
+                logger.info(f"  {key}: {value}")
+        
+        logger.info("")
+        logger.info("=" * 70)
+    
+    def get_ground_truth(self) -> Dict[str, Any]:
+        """Get the ground truth for scoring."""
+        if self._universe:
+            return self._universe.get_ground_truth()
+        return {}
+    
+    def get_context(self) -> Optional[ContextState]:
+        """Get the current context state."""
+        return self._context
+    
+    def cleanup(self):
+        """Clean up resources."""
+        logger.info("Cleaning up OODA loop resources...")
+        self.state = LoopState.STOPPED
+        # Any cleanup needed for components
+
+
+def create_loop(config: Optional[LoopConfig] = None) -> OODALoop:
+    """
+    Factory function to create an OODA loop.
+    
+    Args:
+        config: Optional configuration.
+    """
+    return OODALoop(config)
+
+
+def run_quick_test(iterations: int = 3):
+    """
+    Run a quick test with reduced iterations.
+    
+    Args:
+        iterations: Number of iterations to run.
+    """
+    config = LoopConfig(
+        max_iterations=iterations,
+        num_stars=50,  # Fewer stars for speed
+        num_transients=2,
+        real_time_delay=2.5  # Slightly longer delay for API
+    )
+    
+    loop = create_loop(config)
+    
+    if not loop.initialize():
+        logger.error("Failed to initialize loop")
+        return None
+    
+    try:
+        result = loop.run_marathon()
+        return result
+    except KeyboardInterrupt:
+        logger.info("Test interrupted")
+        return None
+    finally:
+        loop.cleanup()
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Run Project Sentinel OODA Loop")
+    parser.add_argument("--iterations", "-n", type=int, default=16,
+                       help="Number of iterations (default: 16)")
+    parser.add_argument("--quick", "-q", action="store_true",
+                       help="Quick test mode (3 iterations)")
+    parser.add_argument("--stars", "-s", type=int, default=100,
+                       help="Number of stars (default: 100)")
+    parser.add_argument("--transients", "-t", type=int, default=3,
+                       help="Number of transients to inject (default: 3)")
+    
+    args = parser.parse_args()
+    
+    if args.quick:
+        run_quick_test()
+    else:
+        config = LoopConfig(
+            max_iterations=args.iterations,
+            num_stars=args.stars,
+            num_transients=args.transients
+        )
+        loop = create_loop(config)
+        
+        if loop.initialize():
+            try:
+                loop.run_marathon()
+            except KeyboardInterrupt:
+                print("\n⚠️ Interrupted by user")
+            finally:
+                loop.cleanup()
+        else:
+            print("❌ Failed to initialize. Check logs for details.")

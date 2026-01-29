@@ -64,7 +64,7 @@ class SentinelAgent:
         self,
         api_key: Optional[str] = None,
         model_name: Optional[str] = None,
-        temperature: float = 0.3,
+        temperature: float = 0.2,
         max_retries: int = 3,
         retry_delay: float = 2.0
     ):
@@ -256,11 +256,12 @@ class SentinelAgent:
                 # Add the prompt
                 contents.append("\n" + prompt)
                 
-                # Configure generation
+                # Configure generation with JSON output mode
                 config = types.GenerateContentConfig(
                     temperature=current_temp,
                     max_output_tokens=4096,
                     candidate_count=1,
+                    response_mime_type="application/json",  # Force valid JSON output
                 )
                 
                 # Make API call
@@ -464,7 +465,7 @@ def create_agent(
     return SentinelAgent(
         api_key=api_key,
         model_name=model_name,
-        temperature=0.3,
+        temperature=0.2,
         max_retries=3,
         retry_delay=2.0
     )
