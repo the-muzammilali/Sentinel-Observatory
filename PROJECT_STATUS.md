@@ -1,8 +1,8 @@
-# 🔭 Project Sentinel: Phase 2 Complete - Implementation Status
+# 🔭 Project Sentinel: Phase 3 Complete - Implementation Status
 
 **Date:** 2026-01-29  
-**Current Phase:** Phase 2 ✅ Complete  
-**Next Phase:** Phase 3 - Gemini AI Agent Integration  
+**Current Phase:** Phase 3 ✅ Complete  
+**Next Phase:** Phase 4 - Dashboard & Loop Integration  
 **Project:** Google Gemini Hackathon - Marathon Track
 
 ---
@@ -26,6 +26,7 @@
 ```
 
 **Components:**
+
 1. **Universe Controller** - Manages "ground truth" of stars and transient events
 2. **Telescope Camera** - Wraps ScopeSim/MICADO for realistic image generation
 3. **Weather System** - Simulates atmospheric conditions (seeing, extinction)
@@ -49,6 +50,7 @@
 - ✅ **Basic Image Generation**: Verified ability to generate realistic star field images with proper PSF, noise, and detector effects
 
 ### Key Tests
+
 - `tests/verify_setup.py` - Installation verification
 - `tests/test_scopesim_basic.py` - Basic ScopeSim functionality
 - `tests/test_micado.py` - MICADO instrument validation (50-star field)
@@ -62,6 +64,7 @@
 ### Accomplishments
 
 #### 1. Universe Controller (`src/simulation/universe.py`)
+
 - ✅ **Static Star Field**: Generates 100+ stars with random positions and magnitudes (14-20)
 - ✅ **Transient Events**: Implements multiple transient types:
   - Supernova Type Ia (fast rise, slow decay)
@@ -74,12 +77,14 @@
 **Key Method:** `get_source_list_for_scopesim()` - Creates proper astropy Table with Vega spectrum
 
 #### 2. Weather System (`src/simulation/weather.py`)
+
 - ✅ **Perlin Noise-Based Evolution**: Smooth, realistic atmospheric changes
 - ✅ **Seeing Simulation**: Variable atmospheric blur (0.5" to 2.5")
 - ✅ **Cloud Extinction**: Dynamic transparency (0.0 to 1.0)
 - ✅ **Temporal Coherence**: Weather drifts smoothly without sudden jumps
 
 #### 3. Image Differencer (`src/processing/differencer.py`)
+
 - ✅ **Image Alignment**: Sub-pixel registration using phase cross-correlation
 - ✅ **Difference Imaging**: Subtracts aligned images to highlight changes
 - ✅ **Sigma Clipping Detection**: Identifies outlier regions using robust statistics
@@ -88,6 +93,7 @@
 - ✅ **Annotated Outputs**: Generates visualization with detection overlays
 
 #### 4. Integration & Testing
+
 - ✅ **End-to-End Pipeline**: Full workflow from universe → telescope → differencing
 - ✅ **Phase 2 Integration Test** (`tests/test_phase2_integration.py`):
   - Creates 100-star field
@@ -107,6 +113,7 @@
 **Root Cause:** Manual `Source` construction using `Source(x=coords, y=coords, ref=[0], weight=fluxes, spec=["A0V"])` was missing critical spectral metadata required by MICADO.
 
 **Solution:** Refactored to use ScopeSim's template-based approach:
+
 ```python
 from scopesim.source.source_templates import vega_spectrum
 from astropy.table import Table
@@ -166,6 +173,7 @@ source = Source(spectra=spec, table=tbl)
 ### Test Results
 
 **Phase 2 Integration Test:**
+
 ```
 ✅ PHASE 2 INTEGRATION TEST PASSED!
 Total observations: 1
@@ -176,69 +184,103 @@ Candidates detected: 36 regions at 4.0σ threshold
 
 ---
 
-## 🎯 Next Steps: Phase 3 - Gemini AI Agent
-
-### Planned Implementation
+## ✅ Phase 3: Gemini AI Agent (Complete)
 
 **Goal:** Integrate Gemini AI to analyze images and make autonomous decisions
 
+### Accomplishments
+
+#### 1. Data Models (`src/agent/models.py`)
+
+- ✅ **CandidateHistory**: Single observation entry with magnitude, note, confidence
+- ✅ **Candidate**: Tracked transient with status lifecycle (NEW → MONITORING → CONFIRMED)
+- ✅ **WeatherContext**: Atmospheric conditions with auto-calculated observability
+- ✅ **ContextState**: Complete agent state ("Thought Signature") for memory persistence
+- ✅ **AgentDecision**: Structured output with action, reasoning, confidence
+
+#### 2. Prompt Engineering (`src/agent/prompts.py`)
+
+- ✅ Detailed system instruction for SENTINEL agent role
+- ✅ Context state formatting with candidate tables
+- ✅ Few-shot examples for common scenarios
+- ✅ Structured JSON output schema in prompts
+
+#### 3. SentinelAgent (`src/agent/sentinel.py`)
+
+- ✅ Gemini 3 Flash Preview integration with vision API
+- ✅ Multi-image analysis (reference, current, diff_annotated)
+- ✅ Log-scale normalization for astronomical images
+- ✅ Retry logic with exponential backoff (3 attempts)
+- ✅ Temperature reduction on JSON parse failures
+- ✅ Graceful fallback to `wait` action on errors
+
+#### 4. Context Manager (`src/agent/context_manager.py`)
+
+- ✅ State initialization for new marathons
+- ✅ State updates after each decision
+- ✅ Candidate merging between iterations
+- ✅ History compression for long sessions
+- ✅ JSON serialization/deserialization
+- ✅ Session summary generation
+
+### Test Results
+
+**Unit Tests (23/23 passed):**
+
+```
+✅ CandidateHistory validation tests
+✅ Candidate status lifecycle tests
+✅ WeatherContext auto-observability tests
+✅ ContextState management tests
+✅ AgentDecision validation tests
+✅ Prompt generation tests
+✅ ContextManager persistence tests
+```
+
+**Integration Test:**
+
+```
+✅ Gemini API connection successful
+✅ Image analysis with transient detection
+   - Action: observe_again
+   - Confidence: 0.85
+   - Reasoning: "A new point-like source detected..."
+```
+
+---
+
+## 🎯 Next Steps: Phase 4 - Dashboard & Loop
+
+### Planned Implementation
+
+**Goal:** Create the Streamlit dashboard and full OODA loop integration
+
 #### Components to Build
 
-1. **Agent Core** (`src/agent/sentinel.py`)
-   - Gemini API integration with vision capabilities
-   - Structured input/output using Pydantic models
-   - Error handling and retry logic
+1. **Main Loop** (`src/main_loop.py`)
+   - Orchestrate Universe → Telescope → Differencer → Agent
+   - Time advancement and weather updates
+   - Context persistence between iterations
 
-2. **Context State Management**
-   - Persistent memory across iterations ("Thought Signatures")
-   - Candidate tracking and history
-   - Decision reasoning logs
+2. **Dashboard** (`src/app.py`)
+   - Live telescope image display
+   - Agent thought log panel
+   - Weather widget with mini-graph
+   - Light curve plots for candidates
+   - Accuracy scoring vs ground truth
 
-3. **Agent Decision System**
-   - Actions: `observe_again`, `slew_to`, `trigger_alert`, `wait`
-   - Confidence scoring
-   - Weather-aware decision making
-
-4. **Multi-Image Analysis**
-   - Compare reference vs. current observation
-   - Analyze difference image with annotations
-   - Track candidate evolution over time
-
-#### Input Structure (Planned)
-```json
-{
-  "iteration": 12,
-  "simulated_time": "2024-03-15T03:30:00",
-  "weather": {"seeing": 1.2, "clouds": 0.15},
-  "candidates": [
-    {
-      "id": "CAND_01",
-      "x": 512, "y": 640,
-      "history": [
-        {"time": "01:00", "magnitude": 19.5},
-        {"time": "02:00", "magnitude": 18.2}
-      ],
-      "hypothesis": "Possible Type Ia Supernova"
-    }
-  ]
-}
-```
-
-#### Output Structure (Planned)
-```python
-class AgentDecision(BaseModel):
-    action: Literal["observe_again", "slew_to", "trigger_alert", "wait"]
-    target_coordinates: Optional[Tuple[float, float]]
-    reasoning: str
-    confidence: float
-    updated_candidates: List[Candidate]
-```
+3. **Marathon Runner**
+   - 16+ iteration autonomous operation
+   - Start/stop controls
+   - Speed configuration
+   - Error recovery
 
 ---
 
 ## 🚀 How to Run
 
 ### Setup
+
 ```bash
 # Activate virtual environment
 source venv/bin/activate
@@ -248,6 +290,7 @@ python tests/verify_setup.py
 ```
 
 ### Run Tests
+
 ```bash
 # Basic ScopeSim test
 python tests/test_scopesim_basic.py
@@ -260,6 +303,7 @@ python tests/test_phase2_integration.py
 ```
 
 ### Expected Output
+
 - FITS files in `data/observations/`
 - PNG visualizations in `data/observations/`
 - Test summary with detection statistics
@@ -289,7 +333,12 @@ ScopSim/
 ├── logs/                          # Application logs
 │
 ├── src/                           # Source code
-│   ├── agent/                     # AI agent (Phase 3 - TODO)
+│   ├── agent/                     # AI agent (Phase 3 ✅)
+│   │   ├── __init__.py            # Package exports
+│   │   ├── models.py              # Pydantic data models
+│   │   ├── prompts.py             # System instructions & templates
+│   │   ├── sentinel.py            # SentinelAgent class
+│   │   └── context_manager.py     # State persistence
 │   ├── processing/                # Image processing
 │   │   └── differencer.py         # Image differencing pipeline
 │   ├── simulation/                # Universe & telescope
@@ -299,6 +348,8 @@ ScopSim/
 │   └── utils/                     # Utilities
 │
 ├── tests/                         # All test files
+│   ├── test_agent_basic.py       # Agent unit tests (23 tests) ✅
+│   ├── test_phase3_integration.py # Agent integration test ✅
 │   ├── test_micado.py            # MICADO instrument test
 │   ├── test_phase2_integration.py # Full pipeline test ✅
 │   ├── test_scopesim_basic.py    # Basic ScopeSim test
@@ -311,13 +362,13 @@ ScopSim/
 
 ## 📈 Development Progress
 
-| Phase | Status | Completion |
-|-------|--------|------------|
-| **Phase 1: Foundation** | ✅ Complete | 100% |
-| **Phase 2: Universe & Detection** | ✅ Complete | 100% |
-| **Phase 3: Gemini AI Agent** | 🔄 Not Started | 0% |
-| **Phase 4: Dashboard & Loop** | 🔄 Not Started | 0% |
-| **Phase 5: Documentation** | 🔄 Not Started | 0% |
+| Phase                             | Status         | Completion |
+| --------------------------------- | -------------- | ---------- |
+| **Phase 1: Foundation**           | ✅ Complete    | 100%       |
+| **Phase 2: Universe & Detection** | ✅ Complete    | 100%       |
+| **Phase 3: Gemini AI Agent**      | ✅ Complete    | 100%       |
+| **Phase 4: Dashboard & Loop**     | 🔄 Not Started | 0%         |
+| **Phase 5: Documentation**        | 🔄 Not Started | 0%         |
 
 ---
 
@@ -327,6 +378,8 @@ ScopSim/
 2. **Robust Statistics**: MAD-based sigma can fail when >50% of pixels are identical; fallback to std is necessary
 3. **Image Differencing**: Sub-pixel alignment is critical for detecting faint transients
 4. **Testing Strategy**: Incremental testing from single stars to full pipeline prevented major integration issues
+5. **Gemini API Integration**: google-genai SDK with structured prompts enables reliable vision analysis
+6. **Thought Signatures**: Explicit state passing works well for maintaining context across stateless API calls
 
 ---
 
@@ -338,7 +391,9 @@ ScopSim/
 - ✅ Achieved 100% detection rate for bright transients
 - ✅ Clean, modular, well-tested codebase
 - ✅ Comprehensive documentation and test coverage
+- ✅ **Gemini AI Agent with vision analysis (Phase 3)**
+- ✅ **23 unit tests + integration tests passing**
+- ✅ **Structured I/O with Pydantic validation**
+- ✅ **"Thought Signature" memory persistence**
 
-**Ready for Phase 3: Gemini AI Integration! 🚀**
-
-
+**Ready for Phase 4: Dashboard & Loop Integration! 🚀**
