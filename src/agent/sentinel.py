@@ -271,9 +271,15 @@ class SentinelAgent:
                     config=config
                 )
                 
-                # Extract text
+                # Extract text and log raw response
                 if response.text:
-                    return response.text
+                    raw_text = response.text
+                    # Log the raw response for debugging
+                    logger.info(f"=== RAW GEMINI RESPONSE (length: {len(raw_text)}) ===")
+                    logger.info(f"First 500 chars: {raw_text[:500]}")
+                    logger.info(f"Last 200 chars: {raw_text[-200:] if len(raw_text) > 200 else raw_text}")
+                    logger.info("=== END RAW RESPONSE ===")
+                    return raw_text
                 else:
                     logger.warning("Empty response from Gemini")
                     raise ValueError("Empty response received")
@@ -358,7 +364,17 @@ class SentinelAgent:
             
         except json.JSONDecodeError as e:
             logger.error(f"JSON parse error: {e}")
-            logger.debug(f"Raw response: {response_text[:500]}")
+            logger.error(f"=== PARSE FAILURE DETAILS ===")
+            logger.error(f"Error position: line {e.lineno}, column {e.colno}, char {e.pos}")
+            logger.error(f"Full response length: {len(response_text)}")
+            logger.error(f"Response text around error position:")
+            # Show context around error
+            start = max(0, e.pos - 100) if e.pos else 0
+            end = min(len(response_text), (e.pos or 0) + 100)
+            logger.error(f"  ...{response_text[start:end]}...")
+            logger.error(f"=== FULL RAW RESPONSE ===")
+            logger.error(response_text)
+            logger.error(f"=== END FULL RESPONSE ===")
             return create_default_wait_decision(
                 f"Failed to parse agent response as JSON: {str(e)[:100]}"
             )
