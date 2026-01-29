@@ -1,0 +1,27 @@
+# name : Entrance window spectral response
+# author : Ric Davies
+# description : entrance window with coating
+# sources :
+# date_created  : 2023-06-06
+# wavelength_unit : um
+#
+# changes :
+# - 2023-06-30 (OC) added meta keywords and reflection and emissivity columns
+#
+wavelength  transmission  emissivity  reflection
+0.400       0.000         0           1
+0.800       0.0001        0           0.9999
+0.819       0.97          0.03        0
+0.867       0.97          0.03        0
+0.948       0.95          0.05        0
+1.038       0.97          0.03        0
+1.133       0.95          0.05        0
+1.248       0.97          0.03        0
+1.419       0.95          0.05        0
+1.635       0.97          0.03        0
+1.876       0.95          0.05        0
+2.150       0.97          0.03        0
+2.353       0.95          0.05        0
+2.400       0.95          0.05        0
+2.450       0.0001        0           0.9999
+2.700       0.000         0           1
