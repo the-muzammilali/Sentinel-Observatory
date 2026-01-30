@@ -26,6 +26,14 @@ class TransientType(Enum):
     VARIABLE_STAR = "Variable Star"
 
 
+class ArtifactType(Enum):
+    """Types of false positive artifacts that should be rejected"""
+    COSMIC_RAY = "Cosmic Ray"           # Single-frame spike, random location
+    HOT_PIXEL = "Hot Pixel"             # Fixed location, persistent but not varying
+    SATELLITE_STREAK = "Satellite"      # Linear streak across field
+    DETECTOR_ARTIFACT = "Detector"      # Edge effects, readout patterns
+
+
 @dataclass
 class TransientEvent:
     """
@@ -108,6 +116,54 @@ class Star:
 
 
 @dataclass
+class ArtifactEvent:
+    """
+    False positive artifact with short-lived or non-physical behavior.
+    
+    Key differences from TransientEvent:
+    - Very short duration (seconds, not hours)
+    - Instant on/off profile (not Gaussian)
+    - Should be rejected by the agent after investigation
+    
+    Used for testing agent's ability to distinguish real transients from noise.
+    """
+    id: str
+    x: float  # X position in arcseconds
+    y: float  # Y position in arcseconds
+    artifact_time: datetime           # When it appears
+    duration_seconds: float           # How long it lasts (very short)
+    brightness_magnitude: float       # How bright it appears
+    artifact_type: ArtifactType
+    is_ground_truth_artifact: bool = True  # Always True - marks as false positive
+    
+    def is_visible(self, current_time: datetime) -> bool:
+        """Check if artifact is visible at current time (instant on/off)"""
+        end_time = self.artifact_time + timedelta(seconds=self.duration_seconds)
+        return self.artifact_time <= current_time <= end_time
+    
+    def get_magnitude_at_time(self, current_time: datetime) -> float:
+        """
+        Non-Gaussian profile: instant brightness when visible, invisible otherwise.
+        
+        Unlike TransientEvent which has gradual brightening/dimming,
+        artifacts appear and disappear instantly (like cosmic rays).
+        """
+        if self.is_visible(current_time):
+            return self.brightness_magnitude
+        return 99.0  # Completely invisible
+    
+    def get_flux_at_time(self, current_time: datetime) -> float:
+        """Calculate flux for combination with other sources"""
+        mag = self.get_magnitude_at_time(current_time)
+        if mag > 30:  # Invisible
+            return 0.0
+        # Same flux calculation as TransientEvent
+        base_mag = 24.0
+        flux = 10 ** (-0.4 * (mag - base_mag))
+        return float(flux)
+
+
+@dataclass
 class UniverseState:
     """
     Snapshot of the universe at a specific time.
@@ -143,7 +199,8 @@ class UniverseController:
     
     Responsibilities:
     - Maintain static star field
-    - Manage transient events
+    - Manage transient events (real astronomical phenomena)
+    - Manage artifact events (false positives for testing)
     - Advance simulation time
     - Provide source lists for telescope observations
     """
@@ -175,8 +232,11 @@ class UniverseController:
         # Generate static star field
         self.static_stars: List[Star] = self._generate_stars(num_stars)
         
-        # Transient events (will be added later)
+        # Transient events (real astronomical phenomena)
         self.transients: List[TransientEvent] = []
+        
+        # Artifact events (false positives for ambiguity testing)
+        self.artifacts: List[ArtifactEvent] = []
         
         logger.info(f"Universe initialized with {num_stars} stars at {self.current_time}")
     
@@ -241,6 +301,99 @@ class UniverseController:
                    f"peak at {peak_time}, mag {peak_magnitude}")
         
         return transient
+    
+    def inject_artifact(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        artifact_type: ArtifactType = ArtifactType.COSMIC_RAY,
+        brightness_magnitude: float = 16.0,
+        duration_seconds: float = 1.0,
+        offset_seconds: float = 0.0
+    ) -> ArtifactEvent:
+        """
+        Inject a false positive artifact into the universe.
+        
+        Args:
+            x, y: Position in arcseconds (random if None)
+            artifact_type: Type of artifact
+            brightness_magnitude: How bright the artifact appears
+            duration_seconds: How long the artifact lasts
+            offset_seconds: Seconds from current_time when artifact appears
+            
+        Returns:
+            The created ArtifactEvent
+        """
+        # Random position if not specified
+        half_field = self.field_size / 2
+        if x is None:
+            x = float(np.random.uniform(-half_field, half_field))
+        if y is None:
+            y = float(np.random.uniform(-half_field, half_field))
+        
+        artifact_time = self.current_time + timedelta(seconds=offset_seconds)
+        
+        artifact = ArtifactEvent(
+            id=f"ARTIFACT_{len(self.artifacts):03d}",
+            x=x,
+            y=y,
+            artifact_time=artifact_time,
+            duration_seconds=duration_seconds,
+            brightness_magnitude=brightness_magnitude,
+            artifact_type=artifact_type
+        )
+        
+        self.artifacts.append(artifact)
+        logger.info(f"Injected {artifact_type.value} artifact at ({x:.2f}, {y:.2f}), "
+                   f"mag {brightness_magnitude}, duration {duration_seconds}s")
+        
+        return artifact
+    
+    def inject_false_positive_cluster(
+        self,
+        n_artifacts: int = 3,
+        artifact_types: Optional[List[ArtifactType]] = None
+    ) -> List[ArtifactEvent]:
+        """
+        Inject multiple false positive artifacts simultaneously.
+        
+        Useful for regime-shift stress testing where agent must handle
+        multiple false alarms at once.
+        
+        Args:
+            n_artifacts: Number of artifacts to inject
+            artifact_types: Types to use (cycles if fewer than n_artifacts)
+            
+        Returns:
+            List of created ArtifactEvents
+        """
+        if artifact_types is None:
+            artifact_types = [ArtifactType.COSMIC_RAY, ArtifactType.HOT_PIXEL]
+        
+        artifacts = []
+        for i in range(n_artifacts):
+            artifact_type = artifact_types[i % len(artifact_types)]
+            
+            # Vary brightness slightly
+            mag = np.random.uniform(15.0, 18.0)
+            
+            # Vary duration based on type
+            if artifact_type == ArtifactType.COSMIC_RAY:
+                duration = np.random.uniform(0.5, 2.0)
+            elif artifact_type == ArtifactType.HOT_PIXEL:
+                duration = np.random.uniform(60.0, 300.0)  # Longer for hot pixels
+            else:
+                duration = np.random.uniform(1.0, 5.0)
+            
+            artifact = self.inject_artifact(
+                artifact_type=artifact_type,
+                brightness_magnitude=float(mag),
+                duration_seconds=float(duration)
+            )
+            artifacts.append(artifact)
+        
+        logger.info(f"Injected cluster of {n_artifacts} false positive artifacts")
+        return artifacts
     
     def step_time(self, hours: float = 0.5) -> datetime:
         """
@@ -316,6 +469,14 @@ class UniverseController:
             mag = transient.get_magnitude_at_time(self.current_time)
             magnitudes.append(mag)
 
+        # Add visible artifacts (false positives)
+        visible_artifacts = [a for a in self.artifacts if a.is_visible(self.current_time)]
+        for artifact in visible_artifacts:
+            x_coords.append(artifact.x)
+            y_coords.append(artifact.y)
+            mag = artifact.get_magnitude_at_time(self.current_time)
+            magnitudes.append(mag)
+
         num_sources = len(x_coords)
 
         if num_sources == 0:
@@ -360,9 +521,11 @@ class UniverseController:
         Get ground truth for validation/scoring.
         
         Returns:
-            Dictionary with all active transients and their properties
+            Dictionary with all active transients and artifacts
         """
         state = self.get_state()
+        visible_artifacts = [a for a in self.artifacts if a.is_visible(self.current_time)]
+        
         return {
             "time": self.current_time.isoformat(),
             "active_transients": [
@@ -371,10 +534,24 @@ class UniverseController:
                     "type": t.event_type.value,
                     "position": {"x": t.x, "y": t.y},
                     "magnitude": t.get_magnitude_at_time(self.current_time),
-                    "flux": t.get_flux_at_time(self.current_time)
+                    "flux": t.get_flux_at_time(self.current_time),
+                    "is_artifact": False  # Real transient
                 }
                 for t in state.active_transients
-            ]
+            ],
+            "visible_artifacts": [
+                {
+                    "id": a.id,
+                    "type": a.artifact_type.value,
+                    "position": {"x": a.x, "y": a.y},
+                    "magnitude": a.get_magnitude_at_time(self.current_time),
+                    "duration_seconds": a.duration_seconds,
+                    "is_artifact": True  # Should be rejected
+                }
+                for a in visible_artifacts
+            ],
+            "total_real_events": len(state.active_transients),
+            "total_artifacts": len(visible_artifacts)
         }
 
 
