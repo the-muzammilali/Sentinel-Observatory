@@ -48,6 +48,7 @@ class SentinelAgent:
     - Receives telescope images and context state
     - Analyzes images using Gemini vision capabilities
     - Outputs structured decisions for transient detection
+    - Supports multiple API keys with automatic rotation on rate limits
     
     Attributes:
         client: Gemini API client
@@ -55,6 +56,8 @@ class SentinelAgent:
         temperature: Sampling temperature (lower = more deterministic)
         max_retries: Maximum retry attempts on failure
         retry_delay: Base delay between retries in seconds
+        api_keys: List of API keys for rotation
+        current_key_index: Index of currently active API key
     """
     
     DEFAULT_MODEL = "gemini-2.0-flash"
@@ -63,6 +66,7 @@ class SentinelAgent:
     def __init__(
         self,
         api_key: Optional[str] = None,
+        api_keys: Optional[List[str]] = None,
         model_name: Optional[str] = None,
         temperature: float = 0.2,
         max_retries: int = 3,
@@ -72,7 +76,8 @@ class SentinelAgent:
         Initialize the Sentinel Agent.
         
         Args:
-            api_key: Google API key. If None, loads from GOOGLE_API_KEY env var.
+            api_key: Single Google API key. If None, loads from env.
+            api_keys: List of API keys for rotation. Takes precedence over api_key.
             model_name: Gemini model name. Defaults to gemini-2.0-flash.
             temperature: Sampling temperature (0.0-1.0). Lower = more consistent.
             max_retries: Maximum API retry attempts.
@@ -81,15 +86,18 @@ class SentinelAgent:
         # Load environment variables
         load_dotenv()
         
-        # Get API key
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        if not self.api_key:
+        # Load API keys (support both single key and multiple keys)
+        self.api_keys = self._load_api_keys(api_key, api_keys)
+        if not self.api_keys:
             raise ValueError(
-                "GOOGLE_API_KEY not found. Set it in .env file or pass api_key parameter."
+                "No API keys found. Set GOOGLE_API_KEYS in .env file or pass api_key/api_keys parameter."
             )
         
-        # Initialize Gemini client
-        self.client = genai.Client(api_key=self.api_key)
+        self.current_key_index = 0
+        logger.info(f"Loaded {len(self.api_keys)} API key(s) for rotation")
+        
+        # Initialize Gemini client with first key
+        self.client = genai.Client(api_key=self.api_keys[0])
         
         # Model configuration
         self.model_name = model_name or os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
@@ -98,6 +106,64 @@ class SentinelAgent:
         self.retry_delay = retry_delay
         
         logger.info(f"SentinelAgent initialized with model: {self.model_name}")
+    
+    def _load_api_keys(
+        self,
+        api_key: Optional[str],
+        api_keys: Optional[List[str]]
+    ) -> List[str]:
+        """
+        Load API keys from parameters or environment.
+        
+        Priority:
+        1. api_keys parameter (list)
+        2. api_key parameter (single)
+        3. GOOGLE_API_KEYS env var (comma-separated)
+        4. GOOGLE_API_KEY env var (single, legacy)
+        
+        Returns:
+            List of API keys (may be empty)
+        """
+        # Priority 1: explicit list
+        if api_keys:
+            return [k.strip() for k in api_keys if k.strip()]
+        
+        # Priority 2: single key parameter
+        if api_key:
+            return [api_key.strip()]
+        
+        # Priority 3: comma-separated env var
+        keys_env = os.getenv("GOOGLE_API_KEYS", "")
+        if keys_env:
+            keys = [k.strip() for k in keys_env.split(",") if k.strip()]
+            if keys:
+                return keys
+        
+        # Priority 4: legacy single key env var
+        single_key = os.getenv("GOOGLE_API_KEY", "")
+        if single_key:
+            return [single_key.strip()]
+        
+        return []
+    
+    def _rotate_api_key(self) -> bool:
+        """
+        Rotate to the next API key in the list.
+        
+        Returns:
+            True if rotated to a new key, False if only one key available
+        """
+        if len(self.api_keys) <= 1:
+            return False
+        
+        old_index = self.current_key_index
+        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        
+        # Reinitialize client with new key
+        self.client = genai.Client(api_key=self.api_keys[self.current_key_index])
+        
+        logger.info(f"Rotated API key: {old_index + 1} → {self.current_key_index + 1} of {len(self.api_keys)}")
+        return True
     
     def analyze_images(
         self,
@@ -259,7 +325,7 @@ class SentinelAgent:
                 # Configure generation with JSON output mode
                 config = types.GenerateContentConfig(
                     temperature=current_temp,
-                    max_output_tokens=4096,
+                    max_output_tokens=8192,  # Increased from 4096 to prevent response truncation
                     candidate_count=1,
                     response_mime_type="application/json",  # Force valid JSON output
                 )
@@ -287,11 +353,16 @@ class SentinelAgent:
             except Exception as e:
                 error_str = str(e).lower()
                 
-                if "rate" in error_str or "quota" in error_str or "resource_exhausted" in error_str:
-                    # Rate limit - wait longer
-                    wait_time = self.retry_delay * (attempt + 2)
-                    logger.warning(f"Rate limit hit, waiting {wait_time}s...")
-                    time.sleep(wait_time)
+                if "rate" in error_str or "quota" in error_str or "resource_exhausted" in error_str or "503" in error_str or "overload" in error_str or "unavailable" in error_str:
+                    # Rate limit or overload - try rotating API key first
+                    if self._rotate_api_key():
+                        logger.info(f"Rotated to new API key, retrying immediately...")
+                        time.sleep(1)  # Brief pause before retry with new key
+                    else:
+                        # No other keys available, wait longer
+                        wait_time = self.retry_delay * (attempt + 2)
+                        logger.warning(f"Rate limit hit, waiting {wait_time}s...")
+                        time.sleep(wait_time)
                 elif "invalid" in error_str or "argument" in error_str:
                     # Bad input - log and use fallback
                     logger.error(f"Invalid API input: {e}")
@@ -309,7 +380,7 @@ class SentinelAgent:
                     logger.warning(f"Timeout on attempt {attempt + 1}")
                     time.sleep(self.retry_delay)
                 else:
-                    # Unknown error
+                    # Unknown error - also try rotating key
                     logger.error(f"API error: {e}")
                     if attempt < self.max_retries - 1:
                         # Reduce temperature and retry
@@ -442,26 +513,42 @@ class SentinelAgent:
     def test_connection(self) -> bool:
         """
         Test the Gemini API connection with a simple query.
+        Tries all available API keys before failing.
         
         Returns:
             True if connection successful, False otherwise
         """
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents="Say 'SENTINEL ONLINE' if you can read this."
-            )
-            
-            if response.text and "SENTINEL" in response.text.upper():
-                logger.info("Gemini connection test: SUCCESS")
-                return True
-            else:
-                logger.warning(f"Unexpected test response: {response.text}")
-                return True  # Still connected, just unexpected response
+        # Try each API key
+        for attempt in range(len(self.api_keys)):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents="Say 'SENTINEL ONLINE' if you can read this."
+                )
                 
-        except Exception as e:
-            logger.error(f"Gemini connection test FAILED: {e}")
-            return False
+                if response.text and "SENTINEL" in response.text.upper():
+                    logger.info(f"Gemini connection test: SUCCESS (key {self.current_key_index + 1}/{len(self.api_keys)})")
+                    return True
+                else:
+                    logger.warning(f"Unexpected test response: {response.text}")
+                    return True  # Still connected, just unexpected response
+                    
+            except Exception as e:
+                error_str = str(e).lower()
+                logger.warning(f"Connection test failed on key {self.current_key_index + 1}: {str(e)[:100]}")
+                
+                # Try rotating to next key
+                if "rate" in error_str or "quota" in error_str or "429" in error_str or "503" in error_str or "overload" in error_str:
+                    if self._rotate_api_key():
+                        logger.info("Trying next API key...")
+                        time.sleep(1)
+                        continue
+                
+                # If we can't rotate, fail
+                break
+        
+        logger.error(f"Gemini connection test FAILED after trying {len(self.api_keys)} key(s)")
+        return False
 
 
 def create_agent(

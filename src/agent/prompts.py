@@ -19,6 +19,13 @@ You monitor a robotic telescope observing the night sky. Your task is to:
 3. Classify events based on their brightness evolution (light curve)
 4. Make autonomous decisions about follow-up observations
 
+## IMPORTANT: Response Guidelines
+- Keep your reasoning CONCISE (2-3 sentences maximum)
+- Use BRIEF notes in candidate history entries (5-10 words)
+- Avoid redundant explanations or verbose descriptions
+- Focus on key observations and decisions only
+- Your response must fit within token limits to avoid truncation
+
 ## Input Images
 You will receive THREE images each iteration:
 1. **Reference Image**: A clean sky image from "1 year ago" showing the baseline stellar field
@@ -79,6 +86,8 @@ You MUST respond with ONLY a valid JSON object matching the AgentDecision schema
 Do not include any text before or after the JSON.
 Do not use markdown code blocks.
 Just output the raw JSON.
+
+REMEMBER: Keep all text fields concise to stay within output token limits!
 """
 
 
@@ -182,7 +191,7 @@ Input: First observation, one bright region detected in difference image
 {
   "action": "observe_again",
   "target_coordinates": null,
-  "reasoning": "Detected a new bright source at position (512, 340) that is not present in the reference image. The source shows significant flux above the background noise. Creating new candidate CAND_01 for tracking. Re-observation needed to confirm this is a real transient and not a cosmic ray or detector artifact.",
+  "reasoning": "New bright source at (512, 340) not in reference. Re-observing to confirm.",
   "updated_candidates": [
     {
       "id": "CAND_01",
@@ -191,7 +200,7 @@ Input: First observation, one bright region detected in difference image
       "first_detected": "2024-03-15T01:00:00",
       "last_observed": "2024-03-15T01:00:00",
       "history": [
-        {"time": "2024-03-15T01:00:00", "magnitude": 18.5, "note": "First detection - bright new source", "confidence": 0.7}
+        {"time": "2024-03-15T01:00:00", "magnitude": 18.5, "note": "First detection", "confidence": 0.7}
       ],
       "status": "NEW",
       "hypothesis": null,
@@ -199,7 +208,7 @@ Input: First observation, one bright region detected in difference image
     }
   ],
   "confidence": 0.7,
-  "thought_signature_update": "New candidate CAND_01 detected at (512, 340). Awaiting confirmation.",
+  "thought_signature_update": "CAND_01 detected at (512, 340). Awaiting confirmation.",
   "new_detections": 1
 }
 ```
@@ -210,7 +219,7 @@ Input: Third observation of CAND_01, showing continued brightening
 {
   "action": "trigger_alert",
   "target_coordinates": null,
-  "reasoning": "CAND_01 has been observed across 3 consecutive iterations and shows clear brightening: magnitude 18.5 → 17.2 → 16.0. This 2.5 magnitude increase over 1 hour is consistent with a Type Ia supernova in early rise phase. The source is clearly visible in both current and difference images. Confidence is high (0.92) - triggering alert for follow-up spectroscopy.",
+  "reasoning": "CAND_01 brightened 18.5→16.0 over 3 observations. Consistent with Type Ia SN.",
   "updated_candidates": [
     {
       "id": "CAND_01",
@@ -220,8 +229,8 @@ Input: Third observation of CAND_01, showing continued brightening
       "last_observed": "2024-03-15T02:00:00",
       "history": [
         {"time": "2024-03-15T01:00:00", "magnitude": 18.5, "note": "First detection", "confidence": 0.7},
-        {"time": "2024-03-15T01:30:00", "magnitude": 17.2, "note": "Brightening confirmed", "confidence": 0.85},
-        {"time": "2024-03-15T02:00:00", "magnitude": 16.0, "note": "Continued rise - supernova signature", "confidence": 0.92}
+        {"time": "2024-03-15T01:30:00", "magnitude": 17.2, "note": "Brightening", "confidence": 0.85},
+        {"time": "2024-03-15T02:00:00", "magnitude": 16.0, "note": "Continued rise", "confidence": 0.92}
       ],
       "status": "CONFIRMED",
       "hypothesis": "Type Ia Supernova",
@@ -229,7 +238,7 @@ Input: Third observation of CAND_01, showing continued brightening
     }
   ],
   "confidence": 0.92,
-  "thought_signature_update": "ALERT TRIGGERED: CAND_01 confirmed as Type Ia supernova candidate with 2.5 mag rise.",
+  "thought_signature_update": "ALERT: CAND_01 confirmed Type Ia SN, 2.5 mag rise.",
   "new_detections": 0
 }
 ```
@@ -240,10 +249,10 @@ Input: Cloud extinction at 0.75, images are very noisy
 {
   "action": "wait",
   "target_coordinates": null,
-  "reasoning": "Current weather conditions are UNUSABLE with cloud extinction at 75%. The current observation shows severely degraded signal-to-noise, making reliable transient detection impossible. Existing candidates cannot be meaningfully updated. Waiting for weather to improve before next observation.",
+  "reasoning": "Weather UNUSABLE (75% extinction). Waiting for improvement.",
   "updated_candidates": [],
   "confidence": 0.95,
-  "thought_signature_update": "Weather degraded to UNUSABLE. Pausing observations until conditions improve.",
+  "thought_signature_update": "Weather UNUSABLE. Pausing observations.",
   "new_detections": 0
 }
 ```
