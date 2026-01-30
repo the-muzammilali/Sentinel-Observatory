@@ -193,6 +193,49 @@ class UniverseState:
         }
 
 
+@dataclass
+class FollowUpBudget:
+    """
+    Tracks agent resource constraints for follow-up observations.
+    
+    Creates prioritization pressure by limiting how many targets
+    can be followed up within a given time window.
+    """
+    max_followups_per_hour: int = 2
+    current_followups: int = 0
+    window_start: Optional[datetime] = None
+    
+    def use_followup(self) -> bool:
+        """
+        Attempt to use a follow-up slot.
+        
+        Returns:
+            True if follow-up was allowed, False if budget exhausted
+        """
+        if self.current_followups < self.max_followups_per_hour:
+            self.current_followups += 1
+            return True
+        return False
+    
+    def reset(self, new_window_start: datetime) -> None:
+        """Reset budget for a new time window"""
+        self.current_followups = 0
+        self.window_start = new_window_start
+    
+    def remaining(self) -> int:
+        """Return number of remaining follow-up slots"""
+        return max(0, self.max_followups_per_hour - self.current_followups)
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for agent state"""
+        return {
+            "max_per_hour": self.max_followups_per_hour,
+            "used": self.current_followups,
+            "remaining": self.remaining(),
+            "window_start": self.window_start.isoformat() if self.window_start else None
+        }
+
+
 class UniverseController:
     """
     Controls the "ground truth" of the universe.
@@ -237,6 +280,9 @@ class UniverseController:
         
         # Artifact events (false positives for ambiguity testing)
         self.artifacts: List[ArtifactEvent] = []
+        
+        # Follow-up budget for resource constraint pressure
+        self.followup_budget = FollowUpBudget(window_start=self.current_time)
         
         logger.info(f"Universe initialized with {num_stars} stars at {self.current_time}")
     
@@ -394,6 +440,115 @@ class UniverseController:
         
         logger.info(f"Injected cluster of {n_artifacts} false positive artifacts")
         return artifacts
+    
+    def inject_competing_candidates(
+        self,
+        count: int = 3,
+        magnitude_range: Tuple[float, float] = (18.5, 20.5),
+        duration_hours: float = 2.0,
+        spacing_hours: float = 0.3
+    ) -> List[TransientEvent]:
+        """
+        Inject multiple weak candidates that compete for follow-up resources.
+        
+        Creates prioritization pressure by presenting simultaneous faint targets
+        that cannot all be followed up within the available budget.
+        
+        Args:
+            count: Number of competing candidates (2-4 recommended)
+            magnitude_range: (min, max) for peak brightness (fainter = harder)
+            duration_hours: How long each candidate is visible
+            spacing_hours: Offset between candidate appearances
+            
+        Returns:
+            List of created TransientEvents
+        """
+        candidates = []
+        event_types = [
+            TransientType.NOVA,
+            TransientType.SUPERNOVA_II,
+            TransientType.VARIABLE_STAR,
+            TransientType.SUPERNOVA_IA
+        ]
+        
+        half_field = self.field_size / 2
+        
+        for i in range(count):
+            # Random position ensuring separation
+            x = np.random.uniform(-half_field * 0.8, half_field * 0.8)
+            y = np.random.uniform(-half_field * 0.8, half_field * 0.8)
+            
+            # Faint magnitude within range (harder to detect)
+            peak_mag = np.random.uniform(magnitude_range[0], magnitude_range[1])
+            
+            # Stagger start times to create priority pressure
+            start_offset = i * spacing_hours
+            
+            # Cycle through event types
+            event_type = event_types[i % len(event_types)]
+            
+            transient = self.add_transient(
+                x=x,
+                y=y,
+                start_offset_hours=start_offset,
+                duration_hours=duration_hours,
+                peak_magnitude=peak_mag,
+                event_type=event_type
+            )
+            candidates.append(transient)
+        
+        logger.info(f"Injected {count} competing candidates "
+                   f"(mag {magnitude_range[0]:.1f}-{magnitude_range[1]:.1f})")
+        return candidates
+    
+    def get_candidate_priorities(self) -> List[Dict]:
+        """
+        Return ranked list of active transient candidates with priority scores.
+        
+        Priority based on:
+        - Current brightness (brighter = higher priority)
+        - Time remaining (fading soon = higher urgency)
+        - Detection novelty (newer = higher priority)
+        
+        Returns:
+            Sorted list of candidate dicts with priority scores (highest first)
+        """
+        candidates = []
+        
+        for transient in self.transients:
+            if not transient.is_active(self.current_time):
+                continue
+            
+            mag = transient.get_magnitude_at_time(self.current_time)
+            
+            # Calculate time until fade (urgency factor)
+            time_remaining = (transient.end_time - self.current_time).total_seconds() / 3600
+            
+            # Priority score: lower magnitude = brighter = higher score
+            # Urgency bonus for targets about to fade
+            brightness_score = max(0, 25.0 - mag)  # Brighter = higher
+            urgency_score = max(0, 5.0 - time_remaining)  # Fading soon = higher
+            priority = brightness_score + urgency_score * 2
+            
+            candidates.append({
+                "id": transient.id,
+                "type": transient.event_type.value,
+                "position": {"x": transient.x, "y": transient.y},
+                "current_magnitude": mag,
+                "time_remaining_hours": round(time_remaining, 2),
+                "priority_score": round(priority, 2)
+            })
+        
+        # Sort by priority (highest first)
+        candidates.sort(key=lambda c: c["priority_score"], reverse=True)
+        return candidates
+    
+    def get_resource_state(self) -> Dict:
+        """Get current follow-up budget state for agent decision-making."""
+        return {
+            "followup_budget": self.followup_budget.to_dict(),
+            "active_candidates": len(self.get_candidate_priorities())
+        }
     
     def step_time(self, hours: float = 0.5) -> datetime:
         """
