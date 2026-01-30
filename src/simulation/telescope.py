@@ -105,6 +105,25 @@ class TelescopeCamera:
         self._cloud_extinction = np.clip(extinction, 0.0, 1.0)
         logger.debug(f"Cloud extinction set to {self._cloud_extinction}")
     
+    def apply_weather(self, conditions) -> None:
+        """
+        Apply weather conditions from WeatherSystem.
+        
+        Args:
+            conditions: WeatherConditions object with seeing and cloud_extinction
+        """
+        self.set_seeing(conditions.seeing)
+        self.set_cloud_extinction(conditions.cloud_extinction)
+        logger.info(f"Applied weather: seeing={conditions.seeing:.2f}\", "
+                   f"clouds={conditions.cloud_extinction:.2f}")
+    
+    def get_weather_state(self) -> Dict[str, float]:
+        """Get current weather parameters being used."""
+        return {
+            "seeing": self._seeing,
+            "cloud_extinction": self._cloud_extinction
+        }
+    
     def observe(self, source, exposure_time: Optional[float] = None) -> ObservationResult:
         """
         Generate an observation of the given source.
@@ -123,8 +142,16 @@ class TelescopeCamera:
         # Set exposure time
         exp_time = exposure_time or self.config.exposure_time
         
+        # Apply seeing to the optical train's atmospheric effect
+        # ScopeSim uses !ATMO.seeing to control PSF blur from atmosphere
+        try:
+            self._optical_train.cmds["!ATMO.seeing"] = self._seeing
+            logger.debug(f"Applied seeing={self._seeing}\" to optical train")
+        except Exception as e:
+            logger.warning(f"Could not apply seeing to optical train: {e}")
+        
         # Run observation
-        logger.info(f"Observing with {exp_time}s exposure...")
+        logger.info(f"Observing with {exp_time}s exposure, seeing={self._seeing}\"...")
         # Randomize seed for realistic readout noise every time
         import time
         np.random.seed(int(time.time() * 1000) % 2**32)
@@ -150,22 +177,45 @@ class TelescopeCamera:
         if image_data is None:
             raise RuntimeError("No image data found in readout")
         
-        # Apply cloud extinction (simple flux reduction)
+        # Apply cloud extinction with enhanced SNR degradation
         if self._cloud_extinction > 0:
-            # Reduce signal and add extra noise
+            # Calculate transmission coefficient
             transmission = 1.0 - self._cloud_extinction
+            
+            # Separate background from signal
             background = image_data.mean()
             signal = image_data - background
+            
+            # Reduce signal proportionally to cloud cover
             image_data = background + (signal * transmission)
-            # Add extra sky noise from clouds
-            cloud_noise = np.random.normal(0, 50 * self._cloud_extinction, image_data.shape)
+            
+            # Add sky brightness increase from scattered light
+            # Clouds scatter light, increasing background noise
+            sky_increase = 20 * self._cloud_extinction  # ADU
+            image_data = image_data + sky_increase
+            
+            # Add noise proportional to both extinction and image std
+            # This makes faint sources harder to detect
+            base_std = np.std(signal)
+            cloud_noise_std = max(30, base_std * 0.5) * self._cloud_extinction
+            cloud_noise = np.random.normal(0, cloud_noise_std, image_data.shape)
             image_data = image_data + cloud_noise
+            
+            logger.debug(f"Applied cloud extinction: transmission={transmission:.2f}, "
+                        f"noise_std={cloud_noise_std:.1f}")
+        
+        # Calculate weather quality score (1.0 = perfect, 0.0 = terrible)
+        # Penalize both poor seeing and high cloud extinction
+        seeing_quality = 1.0 - (self._seeing - 0.5) / 2.0  # 0.5"->1.0, 2.5"->0.0
+        cloud_quality = 1.0 - self._cloud_extinction
+        weather_quality = np.clip(seeing_quality * cloud_quality, 0.0, 1.0)
         
         # Create metadata
         metadata = {
             "exposure_time": exp_time,
             "seeing": self._seeing,
             "cloud_extinction": self._cloud_extinction,
+            "weather_quality": float(weather_quality),  # NEW: overall quality score
             "shape": image_data.shape,
             "min_value": float(image_data.min()),
             "max_value": float(image_data.max()),

@@ -211,7 +211,7 @@ def test_phase2_integration():
     else:
         print("\n⚠️  PHASE 2 TEST: Lower than expected detection rate")
 
-    return success
+    assert success, f"Expected at least {min_detections} detections, got {sum(detections)}"
 
 
 if __name__ == "__main__":
