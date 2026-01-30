@@ -236,6 +236,56 @@ class FollowUpBudget:
         }
 
 
+@dataclass
+class RandomizationConfig:
+    """
+    Configuration for bounded randomization of universe parameters.
+    
+    Allows controlled variance in transient properties while maintaining
+    reproducibility through deterministic seeds.
+    """
+    # Transient timing variance
+    start_time_jitter_hours: float = 0.5  # ±30 min from specified start
+    duration_variance: float = 0.2  # ±20% of specified duration
+    
+    # Brightness variance
+    magnitude_variance: float = 0.5  # ±0.5 mag from specified peak
+    
+    # Weather bounds
+    seeing_range: Tuple[float, float] = (0.6, 2.0)
+    cloud_range: Tuple[float, float] = (0.0, 0.5)
+    
+    # Reproducibility
+    seed: Optional[int] = None
+    
+    def __post_init__(self):
+        """Initialize RNG if seed provided"""
+        if self.seed is not None:
+            self._rng = np.random.default_rng(self.seed)
+        else:
+            self._rng = np.random.default_rng()
+    
+    def jitter_value(self, base: float, variance: float) -> float:
+        """Apply random jitter within ±variance"""
+        return base + self._rng.uniform(-variance, variance)
+    
+    def jitter_percent(self, base: float, percent: float) -> float:
+        """Apply random jitter as ±percent of base value"""
+        delta = base * percent
+        return base + self._rng.uniform(-delta, delta)
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary"""
+        return {
+            "start_time_jitter_hours": self.start_time_jitter_hours,
+            "duration_variance": self.duration_variance,
+            "magnitude_variance": self.magnitude_variance,
+            "seeing_range": self.seeing_range,
+            "cloud_range": self.cloud_range,
+            "seed": self.seed
+        }
+
+
 class UniverseController:
     """
     Controls the "ground truth" of the universe.
@@ -347,6 +397,132 @@ class UniverseController:
                    f"peak at {peak_time}, mag {peak_magnitude}")
         
         return transient
+    
+    def add_transient_randomized(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        start_offset_hours: float = 0.0,
+        duration_hours: float = 2.0,
+        peak_magnitude: float = 18.0,
+        event_type: Optional[TransientType] = None,
+        config: Optional[RandomizationConfig] = None
+    ) -> TransientEvent:
+        """
+        Add a transient with bounded randomization applied.
+        
+        Applies jitter to timing, magnitude, and duration to avoid
+        a "scripted" feel while maintaining physical plausibility.
+        
+        Args:
+            x, y: Base position (randomized if None)
+            start_offset_hours: Base start offset (jittered)
+            duration_hours: Base duration (jittered by ±20%)
+            peak_magnitude: Base peak brightness (jittered by ±0.5 mag)
+            event_type: Type of transient (random if None)
+            config: Randomization configuration
+            
+        Returns:
+            The created TransientEvent
+        """
+        config = config or RandomizationConfig()
+        
+        # Randomize position if not specified
+        half_field = self.field_size / 2
+        if x is None:
+            x = config._rng.uniform(-half_field * 0.8, half_field * 0.8)
+        if y is None:
+            y = config._rng.uniform(-half_field * 0.8, half_field * 0.8)
+        
+        # Apply jitter to timing
+        jittered_offset = config.jitter_value(
+            start_offset_hours, config.start_time_jitter_hours
+        )
+        
+        # Apply jitter to duration (±percent)
+        jittered_duration = config.jitter_percent(
+            duration_hours, config.duration_variance
+        )
+        jittered_duration = max(0.5, jittered_duration)  # Minimum 30 min
+        
+        # Apply jitter to magnitude
+        jittered_mag = config.jitter_value(
+            peak_magnitude, config.magnitude_variance
+        )
+        
+        # Random event type if not specified
+        if event_type is None:
+            event_types = list(TransientType)
+            event_type = config._rng.choice(event_types)
+        
+        return self.add_transient(
+            x=x,
+            y=y,
+            start_offset_hours=jittered_offset,
+            duration_hours=jittered_duration,
+            peak_magnitude=jittered_mag,
+            event_type=event_type
+        )
+    
+    def generate_random_scenario(
+        self,
+        n_transients: int = 2,
+        n_artifacts: int = 1,
+        config: Optional[RandomizationConfig] = None
+    ) -> Dict:
+        """
+        Generate a complete random scenario with reproducible seed.
+        
+        Creates a mixed scenario with transients and artifacts for
+        testing agent robustness.
+        
+        Args:
+            n_transients: Number of real transients to inject
+            n_artifacts: Number of false positives to inject
+            config: Randomization configuration (with seed for reproducibility)
+            
+        Returns:
+            Dictionary describing the generated scenario
+        """
+        config = config or RandomizationConfig()
+        
+        created_transients = []
+        created_artifacts = []
+        
+        # Generate transients with staggered timing
+        for i in range(n_transients):
+            # Stagger start times
+            base_offset = i * 0.5  # 30 min apart
+            
+            # Vary magnitude (some bright, some faint)
+            base_mag = config._rng.uniform(16.0, 20.0)
+            
+            transient = self.add_transient_randomized(
+                start_offset_hours=base_offset,
+                peak_magnitude=base_mag,
+                config=config
+            )
+            created_transients.append(transient.id)
+        
+        # Generate artifacts
+        for _ in range(n_artifacts):
+            artifact_type = config._rng.choice(list(ArtifactType))
+            artifact = self.inject_artifact(artifact_type=artifact_type)
+            created_artifacts.append(artifact.id)
+        
+        scenario = {
+            "seed": config.seed,
+            "n_transients": n_transients,
+            "n_artifacts": n_artifacts,
+            "transient_ids": created_transients,
+            "artifact_ids": created_artifacts,
+            "config": config.to_dict()
+        }
+        
+        logger.info(f"Generated scenario: {n_transients} transients, "
+                   f"{n_artifacts} artifacts (seed={config.seed})")
+        
+        return scenario
     
     def inject_artifact(
         self,
