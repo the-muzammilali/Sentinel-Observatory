@@ -8,9 +8,14 @@ These models define the data structures used for:
 - Weather context (WeatherContext)
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field, ConfigDict
+
+# Confidence dynamics constants (avoid circular import)
+CONFIDENCE_DECAY_PER_HOUR = 0.05
+CONFIDENCE_MAX = 0.95
+CONFIDENCE_MIN = 0.05
 
 
 class CandidateHistory(BaseModel):
@@ -86,6 +91,14 @@ class Candidate(BaseModel):
         le=1.0,
         description="Overall detection confidence (0.0-1.0)"
     )
+    confidence_history: List[Tuple[str, float, str]] = Field(
+        default_factory=list,
+        description="History of (timestamp, value, reason) tuples"
+    )
+    last_confidence_update: Optional[str] = Field(
+        None,
+        description="ISO timestamp of last confidence change"
+    )
     
     def add_observation(
         self,
@@ -111,6 +124,103 @@ class Candidate(BaseModel):
                 self.status = "CONFIRMED"
         elif len(self.history) >= 2 and self.status == "NEW":
             self.status = "MONITORING"
+    
+    def apply_time_decay(self, current_time: str) -> float:
+        """
+        Apply time-based confidence decay.
+        
+        Decays exponentially based on hours since last update.
+        
+        Args:
+            current_time: Current ISO timestamp
+            
+        Returns:
+            New confidence value after decay
+        """
+        if self.last_confidence_update is None:
+            self.last_confidence_update = current_time
+            return self.confidence
+        
+        # Calculate hours elapsed
+        try:
+            last_dt = datetime.fromisoformat(self.last_confidence_update)
+            curr_dt = datetime.fromisoformat(current_time)
+            hours = (curr_dt - last_dt).total_seconds() / 3600
+        except (ValueError, TypeError):
+            return self.confidence
+        
+        if hours <= 0:
+            return self.confidence
+        
+        # Apply exponential decay
+        decay_factor = (1 - CONFIDENCE_DECAY_PER_HOUR) ** hours
+        old_conf = self.confidence
+        self.confidence = max(CONFIDENCE_MIN, self.confidence * decay_factor)
+        
+        # Record in history
+        decay_amount = old_conf - self.confidence
+        if decay_amount > 0.001:
+            self.confidence_history.append((
+                current_time, 
+                round(self.confidence, 3), 
+                f"decay_{decay_amount:.3f}"
+            ))
+            self.last_confidence_update = current_time
+        
+        return self.confidence
+    
+    def update_confidence(
+        self,
+        delta: float,
+        reason: str,
+        current_time: str
+    ) -> float:
+        """
+        Update confidence with reason tracking.
+        
+        Args:
+            delta: Amount to change confidence (+/-)
+            reason: Explanation for change
+            current_time: Current ISO timestamp
+            
+        Returns:
+            New confidence value
+        """
+        old_conf = self.confidence
+        self.confidence = max(
+            CONFIDENCE_MIN, 
+            min(CONFIDENCE_MAX, self.confidence + delta)
+        )
+        
+        self.confidence_history.append((
+            current_time,
+            round(self.confidence, 3),
+            reason
+        ))
+        self.last_confidence_update = current_time
+        
+        return self.confidence
+    
+    def get_confidence_trend(self) -> str:
+        """
+        Analyze recent confidence trend.
+        
+        Returns:
+            'rising', 'falling', or 'stable'
+        """
+        if len(self.confidence_history) < 2:
+            return "stable"
+        
+        recent = [h[1] for h in self.confidence_history[-5:]]
+        if len(recent) < 2:
+            return "stable"
+        
+        delta = recent[-1] - recent[0]
+        if delta > 0.1:
+            return "rising"
+        elif delta < -0.1:
+            return "falling"
+        return "stable"
 
 
 class WeatherContext(BaseModel):
