@@ -322,9 +322,16 @@ class SentinelAgent:
                 # Try rotating API key if rate limited
                 if "429" in str(e) or "quota" in str(e).lower():
                     if self._rotate_api_key():
-                        # Restart session with new key
+                        # Preserve history and replay context to new session
+                        preserved_history = self.conversation_history.copy()
                         self.end_observation_session()
                         self.start_observation_session(context)
+                        self.conversation_history = preserved_history
+                        
+                        # Replay context summary to new session for continuity
+                        if preserved_history:
+                            self._replay_context_to_session(preserved_history)
+                        logger.info(f"Replayed {len(preserved_history)} observations to new session after key rotation")
                 
                 if attempt < self.max_retries - 1:
                     delay = self.retry_delay * (2 ** attempt)
@@ -344,6 +351,42 @@ class SentinelAgent:
         
         # Parse response
         return self._parse_response(response_text, context)
+    
+    def _replay_context_to_session(self, history: List[dict]) -> None:
+        """
+        Replay a summary of past observations to a new chat session.
+        
+        This is called after API key rotation to restore conversation context.
+        Instead of replaying raw images (expensive), we inject a text summary
+        that provides the agent with continuity about what was observed.
+        
+        Args:
+            history: List of past conversation history entries
+        """
+        if not self.chat_session or not history:
+            return
+        
+        # Build a concise summary of past observations
+        summary_lines = [
+            "CONTEXT RESTORATION: The following summarizes observations from the current session",
+            "that were made before an API connection reset. Use this to maintain continuity.",
+            ""
+        ]
+        
+        for entry in history:
+            iteration = entry.get("iteration", "?")
+            sim_time = entry.get("simulated_time", "unknown")
+            response_snippet = entry.get("response", "")[:200]
+            summary_lines.append(f"Iteration {iteration} ({sim_time}): {response_snippet}...")
+        
+        context_message = "\n".join(summary_lines)
+        
+        try:
+            # Send context summary to new session (no images, just text)
+            self.chat_session.send_message(context_message)
+            logger.debug(f"Context replay successful: {len(history)} entries summarized")
+        except Exception as e:
+            logger.warning(f"Context replay failed (non-critical): {e}")
     
     def end_observation_session(self) -> List[dict]:
         """
