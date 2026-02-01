@@ -147,9 +147,9 @@ class GroundTruthTracker:
     """
     
     # Position matching tolerance
-    # NOTE: Coordinates are in arcseconds (from universe), not degrees
-    # 0.01 degrees = 36 arcseconds, but we're matching in arcsec units
-    MATCH_RADIUS_DEGREES = 36.0  # arcseconds (was incorrectly 0.01)
+    # NOTE: Coordinates are in arcseconds from field center
+    # FOV is 10 arcsec, so 1 arcsec tolerance is ~10% of field
+    MATCH_RADIUS_ARCSEC = 2.0  # arcsec tolerance for matching (accounts for centroid offset)
     
     def __init__(self, reveal_mode: bool = False):
         """
@@ -367,8 +367,8 @@ class GroundTruthTracker:
     ) -> bool:
         """Check if two positions are within matching radius."""
         return (
-            abs(ra1 - ra2) <= self.MATCH_RADIUS_DEGREES and
-            abs(dec1 - dec2) <= self.MATCH_RADIUS_DEGREES
+            abs(ra1 - ra2) <= self.MATCH_RADIUS_ARCSEC and
+            abs(dec1 - dec2) <= self.MATCH_RADIUS_ARCSEC
         )
     
     def enable_reveal_mode(self):

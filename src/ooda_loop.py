@@ -247,10 +247,10 @@ class OODALoop:
             # 7. Initialize Ground Truth Tracker (Improvement #10)
             logger.info("7. Initializing GroundTruthTracker...")
             self._ground_truth = GroundTruthTracker()
-            # Register all transients with ground truth
-            for transient in self._universe.get_ground_truth().get("active_transients", []):
+            # Register ALL transients (not just currently active) with ground truth
+            for transient in self._universe.transients:
                 # Map universe transient type to ground truth transient type
-                event_type_str = transient.get("type", "unknown")
+                event_type_str = transient.event_type.value if hasattr(transient.event_type, 'value') else str(transient.event_type)
                 if "Ia" in event_type_str:
                     gt_type = GTTransientType.SN_IA
                 elif "II" in event_type_str:
@@ -260,15 +260,41 @@ class OODALoop:
                 else:
                     gt_type = GTTransientType.UNKNOWN
 
+                # Access dataclass attributes directly (x, y in arcseconds)
+                gt_ra = transient.x
+                gt_dec = transient.y
                 self._ground_truth.add_event(
                     event_type=gt_type,
-                    ra=transient.get("x", 0.0),
-                    dec=transient.get("y", 0.0),
-                    appearance_time=self._universe.current_time.isoformat(),
-                    peak_magnitude=transient.get("peak_magnitude", 18.0),
+                    ra=gt_ra,
+                    dec=gt_dec,
+                    appearance_time=transient.start_time.isoformat(),
+                    peak_magnitude=transient.peak_magnitude,
                     is_real=True,
-                    event_id=transient.get("id", None)
+                    event_id=transient.id
                 )
+                # Convert to expected pixel position for debugging
+                pixel_scale = self._universe.field_size / 1024.0
+                expected_px = int((gt_ra / pixel_scale) + 512)
+                expected_py = int((gt_dec / pixel_scale) + 512)
+                logger.info(f"      - {transient.id}: sky ({gt_ra:.2f}, {gt_dec:.2f}) arcsec -> expected pixel ({expected_px}, {expected_py})")
+            
+            # Also register artifacts (false positives) for tracking
+            for artifact in self._universe.artifacts:
+                gt_ra = artifact.x
+                gt_dec = artifact.y
+                self._ground_truth.add_event(
+                    event_type=GTTransientType.UNKNOWN,  # Artifact type
+                    ra=gt_ra,
+                    dec=gt_dec,
+                    appearance_time=artifact.artifact_time.isoformat(),  # artifact_time not start_time
+                    peak_magnitude=artifact.brightness_magnitude,  # brightness_magnitude not magnitude
+                    is_real=False,  # This is a FALSE POSITIVE source
+                    event_id=artifact.id
+                )
+                pixel_scale = self._universe.field_size / 1024.0
+                expected_px = int((gt_ra / pixel_scale) + 512)
+                expected_py = int((gt_dec / pixel_scale) + 512)
+                logger.info(f"      - {artifact.id} (artifact): sky ({gt_ra:.2f}, {gt_dec:.2f}) arcsec -> expected pixel ({expected_px}, {expected_py})")
             logger.info(f"   ✓ Ground truth tracker ready ({len(self._ground_truth.events)} events)")
             
             # 8. Initialize Memory Manager (Improvement #8)
@@ -304,6 +330,11 @@ class OODALoop:
                 weather=weather_context
             )
             logger.info("   ✓ Context initialized")
+            
+            # 12. Start observation session for long-context reasoning
+            logger.info("12. Starting observation session...")
+            self._agent.start_observation_session(self._context)
+            logger.info("   ✓ Observation session ready")
             
             self.state = LoopState.PAUSED
             logger.info("")
@@ -458,6 +489,11 @@ class OODALoop:
             
             num_detections = len(diff_result.candidate_regions)
             logger.info(f"   Detected {num_detections} candidate regions")
+            
+            # Debug: Log detected candidate positions vs ground truth
+            for cand in diff_result.candidate_regions[:5]:  # First 5
+                sky_x, sky_y = self._pixel_to_sky(cand.x, cand.y)
+                logger.debug(f"   Differencer candidate: pixel ({cand.x}, {cand.y}) -> sky ({sky_x:.3f}, {sky_y:.3f}) arcsec, sig={cand.significance:.1f}σ")
             
             # Save observation and diff
             obs_path = Path(self.config.observation_dir) / f"iteration_{self.iteration:03d}"
@@ -633,18 +669,27 @@ class OODALoop:
 
                 # Get coordinates - convert from pixels to sky if needed
                 if decision.target_coordinates:
-                    # If target_coordinates provided, assume they're already in sky coords
-                    sky_x, sky_y = decision.target_coordinates
+                    # IMPORTANT: target_coordinates from agent are raw pixel values, need conversion
+                    pixel_x, pixel_y = decision.target_coordinates
+                    sky_x, sky_y = self._pixel_to_sky(int(pixel_x), int(pixel_y))
+                    logger.debug(f"   Alert coords from target_coordinates: pixel ({pixel_x}, {pixel_y}) -> sky ({sky_x:.3f}, {sky_y:.3f})")
                 elif hasattr(candidate, 'x') and hasattr(candidate, 'y'):
                     # Convert pixel coordinates to sky coordinates
                     sky_x, sky_y = self._pixel_to_sky(candidate.x, candidate.y)
+                    logger.debug(f"   Alert coords from candidate: pixel ({candidate.x}, {candidate.y}) -> sky ({sky_x:.3f}, {sky_y:.3f})")
                 elif hasattr(candidate, 'ra') and hasattr(candidate, 'dec'):
                     # Already in sky coordinates
                     sky_x, sky_y = candidate.ra, candidate.dec
+                    logger.debug(f"   Alert coords already in sky: ({sky_x:.3f}, {sky_y:.3f})")
                 else:
                     sky_x, sky_y = None, None
+                    logger.warning("   Alert has no usable coordinates!")
 
                 if sky_x is not None and sky_y is not None:
+                    # Debug: show pixel->sky conversion
+                    if hasattr(candidate, 'x') and hasattr(candidate, 'y'):
+                        logger.debug(f"   Pixel ({candidate.x}, {candidate.y}) -> Sky ({sky_x:.3f}, {sky_y:.3f}) arcsec")
+                    
                     is_true_positive = self._ground_truth.record_alert(
                         candidate_id=candidate.id,
                         ra=sky_x,
@@ -653,7 +698,7 @@ class OODALoop:
                     )
 
                     logger.info(f"   Ground truth: {'✓ TRUE POSITIVE' if is_true_positive else '✗ FALSE POSITIVE'} "
-                               f"at ({sky_x:.2f}, {sky_y:.2f})")
+                               f"at sky ({sky_x:.2f}, {sky_y:.2f}) arcsec")
 
             # Log decision (Improvement #6)
             if self._decision_logger:
@@ -812,8 +857,14 @@ class OODALoop:
     def cleanup(self):
         """Clean up resources."""
         logger.info("Cleaning up OODA loop resources...")
+        
+        # End observation session and get conversation history
+        if hasattr(self, '_agent') and self._agent:
+            history = self._agent.end_observation_session()
+            if history:
+                logger.info(f"Observation session ended: {len(history)} observations logged")
+        
         self.state = LoopState.STOPPED
-        # Any cleanup needed for components
 
 
 def create_loop(config: Optional[LoopConfig] = None) -> OODALoop:

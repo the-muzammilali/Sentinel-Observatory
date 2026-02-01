@@ -34,7 +34,7 @@ from .models import (
     WeatherContext,
     create_default_wait_decision
 )
-from .prompts import build_full_prompt, SYSTEM_INSTRUCTION
+from .prompts import build_full_prompt, SYSTEM_INSTRUCTION, OBSERVATION_SESSION_INSTRUCTION
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class SentinelAgent:
     - Receives telescope images and context state
     - Analyzes images using Gemini vision capabilities
     - Outputs structured decisions for transient detection
-    - Supports multiple API keys with automatic rotation on rate limits
+    - Uses persistent chat sessions for long-context reasoning
     
     Attributes:
         client: Gemini API client
@@ -58,6 +58,9 @@ class SentinelAgent:
         retry_delay: Base delay between retries in seconds
         api_keys: List of API keys for rotation
         current_key_index: Index of currently active API key
+        chat_session: Persistent chat session for long-context observation
+        conversation_history: History of all messages for debugging
+        session_active: Whether a chat session is currently active
     """
     
     DEFAULT_MODEL = "gemini-2.0-flash"
@@ -104,6 +107,18 @@ class SentinelAgent:
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        
+        # Persistent chat session for long-context reasoning
+        self.chat_session = None
+        self.conversation_history = []
+        self.session_active = False
+        
+        # Image labels for chat messages
+        self._image_labels = [
+            "REFERENCE IMAGE (clean sky from 1 year ago):",
+            "CURRENT OBSERVATION (latest telescope image):",
+            "DIFFERENCE IMAGE (annotated with candidate regions):"
+        ]
         
         logger.info(f"SentinelAgent initialized with model: {self.model_name}")
     
@@ -173,12 +188,12 @@ class SentinelAgent:
         context: ContextState
     ) -> AgentDecision:
         """
-        Analyze telescope images and make a decision.
+        Analyze telescope images and make a decision using persistent chat session.
         
         This is the main entry point for the agent. It:
-        1. Prepares images for the API
-        2. Builds the prompt with context
-        3. Calls Gemini with retry logic
+        1. Starts a chat session if not already active
+        2. Prepares images for the API
+        3. Sends observation to the chat session
         4. Parses and validates the response
         
         Args:
@@ -200,6 +215,10 @@ class SentinelAgent:
                 "Waiting for conditions to improve."
             )
         
+        # Ensure chat session is started
+        if not self.chat_session:
+            self.start_observation_session(context)
+        
         # Prepare images
         try:
             images = self._prepare_images(reference, current, diff_annotated)
@@ -207,17 +226,140 @@ class SentinelAgent:
             logger.error(f"Image preparation failed: {e}")
             return create_default_wait_decision(f"Image preparation error: {e}")
         
-        # Build prompt
-        prompt = build_full_prompt(context, include_examples=True)
-        
-        # Call Gemini with retry
-        response_text = self._call_gemini_with_retry(prompt, images)
-        
-        # Parse response
-        decision = self._parse_response(response_text, context)
+        # Send observation to chat session
+        decision = self._send_observation(images, context)
         
         logger.info(f"Decision: {decision.action} (confidence: {decision.confidence:.2f})")
         return decision
+    
+    def start_observation_session(self, initial_context: ContextState) -> None:
+        """
+        Initialize persistent chat session for long-context observation.
+        
+        This creates a Gemini chat session that maintains conversation history
+        across multiple observations, enabling the agent to:
+        - Reference past observations
+        - Track long-term trends
+        - Build confidence over time
+        
+        Args:
+            initial_context: Initial context state for the session
+        """
+        if self.session_active:
+            logger.warning("Session already active, ending previous session")
+            self.end_observation_session()
+        
+        logger.info("Starting observation session...")
+        
+        # Format the system instruction with initial context
+        system_prompt = OBSERVATION_SESSION_INSTRUCTION.format(
+            simulated_time=initial_context.simulated_time,
+            num_candidates=len(initial_context.candidates)
+        )
+        
+        try:
+            from google.genai import types
+            
+            self.chat_session = self.client.chats.create(
+                model=self.model_name,
+                config=types.GenerateContentConfig(
+                    temperature=self.temperature,
+                    response_mime_type="application/json",
+                    system_instruction=system_prompt
+                )
+            )
+            self.session_active = True
+            self.conversation_history = []
+            logger.info("✓ Observation session started successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to start observation session: {e}")
+            raise
+    
+    def _send_observation(
+        self,
+        images: List[Image.Image],
+        context: ContextState
+    ) -> AgentDecision:
+        """
+        Send observation to the active chat session.
+        
+        This method builds a concise message (since full context is in chat memory)
+        and sends it along with the three telescope images.
+        
+        Args:
+            images: List of [reference, current, difference] PIL images
+            context: Current context with weather and candidates
+            
+        Returns:
+            Parsed AgentDecision from the model response
+        """
+        from .prompts import build_context_prompt
+        
+        # Build observation message
+        observation_prompt = build_context_prompt(context)
+        
+        # Build content list with labeled images
+        contents = []
+        for label, img in zip(self._image_labels, images):
+            contents.append(label)
+            contents.append(img)
+        contents.append(observation_prompt)
+        
+        # Send to chat session with retry logic
+        response_text = None
+        last_error = None
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = self.chat_session.send_message(contents)
+                response_text = response.text
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Chat send attempt {attempt + 1} failed: {e}")
+                
+                # Try rotating API key if rate limited
+                if "429" in str(e) or "quota" in str(e).lower():
+                    if self._rotate_api_key():
+                        # Restart session with new key
+                        self.end_observation_session()
+                        self.start_observation_session(context)
+                
+                if attempt < self.max_retries - 1:
+                    delay = self.retry_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+        
+        if response_text is None:
+            logger.error(f"All chat attempts failed: {last_error}")
+            return create_default_wait_decision(f"API error after {self.max_retries} attempts: {last_error}")
+        
+        # Track conversation for debugging
+        self.conversation_history.append({
+            "iteration": context.iteration,
+            "simulated_time": context.simulated_time,
+            "response": response_text[:500]  # Truncate for memory
+        })
+        
+        # Parse response
+        return self._parse_response(response_text, context)
+    
+    def end_observation_session(self) -> List[dict]:
+        """
+        End the current observation session.
+        
+        Returns:
+            List of conversation history entries for analysis
+        """
+        if self.chat_session:
+            logger.info(f"Ending observation session ({len(self.conversation_history)} observations)")
+            self.chat_session = None
+        
+        self.session_active = False
+        history = self.conversation_history
+        self.conversation_history = []
+        return history
     
     def _prepare_images(
         self,
