@@ -147,7 +147,9 @@ class GroundTruthTracker:
     """
     
     # Position matching tolerance
-    MATCH_RADIUS_DEGREES = 0.01  # ~36 arcsec
+    # NOTE: Coordinates are in arcseconds (from universe), not degrees
+    # 0.01 degrees = 36 arcseconds, but we're matching in arcsec units
+    MATCH_RADIUS_DEGREES = 36.0  # arcseconds (was incorrectly 0.01)
     
     def __init__(self, reveal_mode: bool = False):
         """

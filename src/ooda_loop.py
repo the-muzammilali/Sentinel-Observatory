@@ -35,7 +35,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Local imports
-from src.simulation.universe import UniverseController, TransientType
+from src.simulation.universe import UniverseController, TransientType, ArtifactType
 from src.simulation.telescope import TelescopeCamera, ObservationResult
 from src.simulation.weather import WeatherSystem, WeatherConditions
 from src.processing.differencer import ImageDifferencer, DiffResult
@@ -47,6 +47,11 @@ from src.agent import (
     WeatherContext,
     create_initial_context
 )
+
+# Improvement modules integration
+from src.simulation.ground_truth import GroundTruthTracker, TransientType as GTTransientType
+from src.agent.memory_manager import MemoryManager, MemoryConfig
+from src.agent.decision_log import DecisionLogger
 
 
 class LoopState(Enum):
@@ -78,6 +83,10 @@ class LoopConfig:
     auto_inject_transients: bool = True
     num_transients: int = 3
     
+    # False positive injection (Improvement #1)
+    inject_false_positives: bool = True
+    num_false_positives: int = 2
+    
     # Data paths
     state_dir: str = "data/agent_state"
     observation_dir: str = "data/observations"
@@ -85,6 +94,14 @@ class LoopConfig:
     # Weather
     seeing_mean: float = 1.0
     cloud_mean: float = 0.2
+    
+    # Memory hygiene (Improvement #8)
+    enable_memory_manager: bool = True
+    memory_max_candidates: int = 50
+    memory_stale_hours: float = 48.0
+    
+    # Decision logging (Improvement #6)
+    enable_decision_logging: bool = True
 
 
 @dataclass
@@ -148,10 +165,18 @@ class OODALoop:
         self._context_manager: Optional[ContextManager] = None
         self._context: Optional[ContextState] = None
         
+        # Improvement modules (lazy initialized)
+        self._ground_truth: Optional[GroundTruthTracker] = None
+        self._memory_manager: Optional[MemoryManager] = None
+        self._decision_logger: Optional[DecisionLogger] = None
+        
         logger.info("OODALoop initialized with config:")
         logger.info(f"  - Max iterations: {self.config.max_iterations}")
         logger.info(f"  - Step interval: {self.config.step_interval_hours} hours")
         logger.info(f"  - Auto inject transients: {self.config.auto_inject_transients}")
+        logger.info(f"  - Inject false positives: {self.config.inject_false_positives}")
+        logger.info(f"  - Memory manager: {self.config.enable_memory_manager}")
+        logger.info(f"  - Decision logging: {self.config.enable_decision_logging}")
     
     def initialize(self) -> bool:
         """
@@ -177,6 +202,10 @@ class OODALoop:
             # Inject transients if configured
             if self.config.auto_inject_transients:
                 self._inject_transients()
+            
+            # Inject false positives if configured (Improvement #1)
+            if self.config.inject_false_positives:
+                self._inject_false_positives()
             
             # 2. Initialize Telescope Camera
             logger.info("2. Initializing TelescopeCamera...")
@@ -215,13 +244,56 @@ class OODALoop:
             self._context_manager = ContextManager(state_dir=self.config.state_dir)
             logger.info("   ✓ Context manager ready")
             
-            # 7. Capture reference image
-            logger.info("7. Capturing reference image...")
+            # 7. Initialize Ground Truth Tracker (Improvement #10)
+            logger.info("7. Initializing GroundTruthTracker...")
+            self._ground_truth = GroundTruthTracker()
+            # Register all transients with ground truth
+            for transient in self._universe.get_ground_truth().get("active_transients", []):
+                # Map universe transient type to ground truth transient type
+                event_type_str = transient.get("type", "unknown")
+                if "Ia" in event_type_str:
+                    gt_type = GTTransientType.SN_IA
+                elif "II" in event_type_str:
+                    gt_type = GTTransientType.SN_II
+                elif "nova" in event_type_str.lower():
+                    gt_type = GTTransientType.NOVA
+                else:
+                    gt_type = GTTransientType.UNKNOWN
+
+                self._ground_truth.add_event(
+                    event_type=gt_type,
+                    ra=transient.get("x", 0.0),
+                    dec=transient.get("y", 0.0),
+                    appearance_time=self._universe.current_time.isoformat(),
+                    peak_magnitude=transient.get("peak_magnitude", 18.0),
+                    is_real=True,
+                    event_id=transient.get("id", None)
+                )
+            logger.info(f"   ✓ Ground truth tracker ready ({len(self._ground_truth.events)} events)")
+            
+            # 8. Initialize Memory Manager (Improvement #8)
+            if self.config.enable_memory_manager:
+                logger.info("8. Initializing MemoryManager...")
+                memory_config = MemoryConfig(
+                    max_active_candidates=self.config.memory_max_candidates,
+                    stale_threshold_hours=self.config.memory_stale_hours
+                )
+                self._memory_manager = MemoryManager(config=memory_config)
+                logger.info("   ✓ Memory manager ready")
+            
+            # 9. Initialize Decision Logger (Improvement #6)
+            if self.config.enable_decision_logging:
+                logger.info("9. Initializing DecisionLogger...")
+                self._decision_logger = DecisionLogger()
+                logger.info("   ✓ Decision logger ready")
+            
+            # 10. Capture reference image
+            logger.info("10. Capturing reference image...")
             self.reference_image = self._capture_reference()
             logger.info(f"   ✓ Reference image captured: {self.reference_image.shape}")
             
-            # 8. Initialize context state
-            logger.info("8. Initializing context state...")
+            # 11. Initialize context state
+            logger.info("11. Initializing context state...")
             weather_conditions = self._weather.get_conditions()
             weather_context = WeatherContext.from_weather_system(
                 seeing=weather_conditions.seeing,
@@ -286,7 +358,45 @@ class OODALoop:
             
             logger.info(f"   - Transient {i+1}: {event_type.value} at ({x:.2f}, {y:.2f}), "
                        f"peak mag={peak_mag:.1f}, starts in {start_offset:.1f}h")
-    
+
+    def _inject_false_positives(self):
+        """Inject false positive artifacts into the universe."""
+        logger.info(f"   Injecting {self.config.num_false_positives} false positive artifacts...")
+
+        # Use universe's built-in false positive cluster injection
+        artifacts = self._universe.inject_false_positive_cluster(
+            n_artifacts=self.config.num_false_positives
+        )
+
+        logger.info(f"   ✓ Injected {len(artifacts)} false positive artifacts")
+
+    def _pixel_to_sky(self, pixel_x: int, pixel_y: int) -> Tuple[float, float]:
+        """
+        Convert pixel coordinates to sky coordinates (arcseconds).
+
+        The universe uses a coordinate system centered at (0, 0) with
+        field_size in arcseconds. The image is 1024x1024 pixels centered
+        at pixel (512, 512).
+
+        Args:
+            pixel_x: X pixel coordinate (0-1024)
+            pixel_y: Y pixel coordinate (0-1024)
+
+        Returns:
+            Tuple of (sky_x, sky_y) in arcseconds (same units as universe)
+        """
+        # Image center corresponds to (0, 0) in sky coordinates
+        center_pixel = 512
+
+        # Calculate pixel scale (arcseconds per pixel)
+        pixel_scale = self._universe.field_size / 1024.0
+
+        # Convert to sky coordinates
+        sky_x = (pixel_x - center_pixel) * pixel_scale
+        sky_y = (pixel_y - center_pixel) * pixel_scale
+
+        return sky_x, sky_y
+
     def _capture_reference(self) -> np.ndarray:
         """Capture reference image (before any transients)."""
         # Get source list (just static stars for reference)
@@ -384,7 +494,23 @@ class OODALoop:
             
             logger.info(f"   Decision: {decision.action} (confidence: {decision.confidence:.2f})")
             logger.info(f"   Reasoning: {decision.reasoning[:100]}...")
-            
+
+            # Track detections with ground truth (Improvement #10)
+            if self._ground_truth and decision.updated_candidates:
+                for candidate in decision.updated_candidates:
+                    # Convert pixel coordinates to sky coordinates
+                    if hasattr(candidate, 'x') and hasattr(candidate, 'y'):
+                        sky_x, sky_y = self._pixel_to_sky(candidate.x, candidate.y)
+
+                        matched_event = self._ground_truth.record_detection(
+                            candidate_id=candidate.id,
+                            ra=sky_x,
+                            dec=sky_y,
+                            detection_time=self._universe.current_time.isoformat()
+                        )
+                        if matched_event:
+                            logger.debug(f"   Ground truth: Candidate {candidate.id} at ({sky_x:.2f}, {sky_y:.2f}) matched event {matched_event}")
+
             # ============ ACT ============
             self.state = LoopState.ACTING
             logger.info("⚡ ACT: Executing decision...")
@@ -399,10 +525,32 @@ class OODALoop:
             
             # Save context
             self._context_manager.save_context(self._context)
-            
+
+            # Apply memory hygiene if enabled (Improvement #8)
+            if self._memory_manager and self._context:
+                # Get archived candidates from context (or initialize empty list)
+                archived = getattr(self._context, 'archived_candidates', [])
+
+                # Apply hygiene to prune stale candidates and manage memory
+                pruned_candidates, updated_archived, mem_stats = self._memory_manager.apply_hygiene(
+                    candidates=self._context.candidates,
+                    archived=archived,
+                    current_time=self._universe.current_time
+                )
+
+                # Update context with pruned candidates
+                self._context.candidates = pruned_candidates
+                # Store archived candidates back (if context supports it)
+                if hasattr(self._context, 'archived_candidates'):
+                    self._context.archived_candidates = updated_archived
+
+                logger.info(f"   Memory hygiene: {mem_stats.active_candidates} active, "
+                           f"{mem_stats.archived_candidates} archived, "
+                           f"~{mem_stats.estimated_total_tokens} tokens")
+
             # Act on decision
             self._execute_action(decision)
-            
+
             # Calculate duration
             duration = time.time() - start_time
             
@@ -444,29 +592,100 @@ class OODALoop:
     def _execute_action(self, decision: AgentDecision):
         """
         Execute the agent's decision.
-        
+
         Args:
             decision: The decision from the agent.
         """
+        # Import decision logger types if needed
+        from src.agent.decision_log import ActionType, WaitReason
+
         if decision.action == "observe_again":
             logger.info("   → Will re-observe current field")
-            # No action needed - next iteration will observe same field
-            
+
+            # Log decision (Improvement #6)
+            if self._decision_logger:
+                self._decision_logger.log_action(
+                    action=ActionType.OBSERVE,
+                    detail=decision.reasoning,
+                    confidence=decision.confidence
+                )
+
         elif decision.action == "slew_to":
             if decision.target_coordinates:
                 x, y = decision.target_coordinates
                 logger.info(f"   → Slewing to coordinates ({x:.2f}, {y:.2f})")
-                # In a real system, this would move the telescope
-                # For simulation, we could adjust the field center
-                
+
+                # Log decision (Improvement #6)
+                if self._decision_logger:
+                    self._decision_logger.log_action(
+                        action=ActionType.SLEW,
+                        target=f"({x:.2f}, {y:.2f})",
+                        detail=decision.reasoning,
+                        confidence=decision.confidence
+                    )
+
         elif decision.action == "trigger_alert":
             logger.info("   → 🚨 ALERT TRIGGERED!")
-            # In a real system, this would send notifications
-            # Log the alert for scoring
-            
+
+            # Track alert with ground truth (Improvement #10)
+            if self._ground_truth and decision.updated_candidates:
+                candidate = decision.updated_candidates[0]
+
+                # Get coordinates - convert from pixels to sky if needed
+                if decision.target_coordinates:
+                    # If target_coordinates provided, assume they're already in sky coords
+                    sky_x, sky_y = decision.target_coordinates
+                elif hasattr(candidate, 'x') and hasattr(candidate, 'y'):
+                    # Convert pixel coordinates to sky coordinates
+                    sky_x, sky_y = self._pixel_to_sky(candidate.x, candidate.y)
+                elif hasattr(candidate, 'ra') and hasattr(candidate, 'dec'):
+                    # Already in sky coordinates
+                    sky_x, sky_y = candidate.ra, candidate.dec
+                else:
+                    sky_x, sky_y = None, None
+
+                if sky_x is not None and sky_y is not None:
+                    is_true_positive = self._ground_truth.record_alert(
+                        candidate_id=candidate.id,
+                        ra=sky_x,
+                        dec=sky_y,
+                        alert_time=self._universe.current_time.isoformat()
+                    )
+
+                    logger.info(f"   Ground truth: {'✓ TRUE POSITIVE' if is_true_positive else '✗ FALSE POSITIVE'} "
+                               f"at ({sky_x:.2f}, {sky_y:.2f})")
+
+            # Log decision (Improvement #6)
+            if self._decision_logger:
+                self._decision_logger.log_action(
+                    action=ActionType.ALERT,
+                    detail=decision.reasoning,
+                    confidence=decision.confidence
+                )
+
         elif decision.action == "wait":
             logger.info("   → Waiting due to conditions")
-            # No action needed
+
+            # Log wait decision with reasoning (Improvement #6)
+            if self._decision_logger:
+                # Determine wait reason from decision reasoning
+                wait_reason = WaitReason.CONFIDENCE_TOO_LOW
+                if "weather" in decision.reasoning.lower():
+                    wait_reason = WaitReason.WEATHER_UNCERTAINTY
+                elif "persistence" in decision.reasoning.lower():
+                    wait_reason = WaitReason.PERSISTENCE_CHECK
+
+                weather_str = None
+                if self._weather:
+                    conditions = self._weather.get_conditions()
+                    weather_str = f"seeing={conditions.seeing:.2f}\", clouds={conditions.cloud_extinction:.2f}"
+
+                self._decision_logger.log_wait(
+                    reason=wait_reason,
+                    detail=decision.reasoning,
+                    confidence=decision.confidence,
+                    weather=weather_str
+                )
     
     def run_marathon(self) -> MarathonResult:
         """
@@ -516,6 +735,22 @@ class OODALoop:
                 ) if self._context else 0
                 accuracy = confirmed / ground_truth
             
+            # Finalize ground truth metrics (Improvement #10)
+            if self._ground_truth:
+                final_metrics = self._ground_truth.finalize_metrics()
+                logger.info("")
+                logger.info("=" * 70)
+                logger.info("Ground Truth Evaluation Metrics:")
+                logger.info(f"  Precision: {final_metrics.precision:.2%}")
+                logger.info(f"  Recall: {final_metrics.recall:.2%}")
+                logger.info(f"  F1 Score: {final_metrics.f1_score:.2%}")
+                logger.info(f"  True Positives: {final_metrics.true_positives}")
+                logger.info(f"  False Positives: {final_metrics.false_positives}")
+                logger.info(f"  False Negatives: {final_metrics.false_negatives}")
+                if final_metrics.mean_latency_hours > 0:
+                    logger.info(f"  Mean Alert Latency: {final_metrics.mean_latency_hours:.2f} hours")
+                logger.info("=" * 70)
+
             marathon_result = MarathonResult(
                 start_time=start_time,
                 end_time=end_time,
@@ -526,7 +761,7 @@ class OODALoop:
                 detection_accuracy=accuracy,
                 iterations=iterations
             )
-            
+
             self.marathon_result = marathon_result
             self._print_marathon_summary(marathon_result)
             
