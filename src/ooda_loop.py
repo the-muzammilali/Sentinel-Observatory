@@ -279,7 +279,7 @@ class OODALoop:
                 logger.info(f"      - {transient.id}: sky ({gt_ra:.2f}, {gt_dec:.2f}) arcsec -> expected pixel ({expected_px}, {expected_py})")
             
             # Also register artifacts (false positives) for tracking
-            for artifact in self._universe.artifacts:
+            for artifact in getattr(self._universe, 'artifacts', []):
                 gt_ra = artifact.x
                 gt_dec = artifact.y
                 self._ground_truth.add_event(

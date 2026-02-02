@@ -312,6 +312,10 @@ class SentinelAgent:
         
         for attempt in range(self.max_retries):
             try:
+                # Guard against None session
+                if not self.chat_session:
+                    raise RuntimeError("Chat session not active - call start_observation_session first")
+                
                 response = self.chat_session.send_message(contents)
                 response_text = response.text
                 break
@@ -331,7 +335,7 @@ class SentinelAgent:
                         # Replay context summary to new session for continuity
                         if preserved_history:
                             self._replay_context_to_session(preserved_history)
-                        logger.info(f"Replayed {len(preserved_history)} observations to new session after key rotation")
+                            logger.info(f"Replayed {len(preserved_history)} observations to new session after key rotation")
                 
                 if attempt < self.max_retries - 1:
                     delay = self.retry_delay * (2 ** attempt)
