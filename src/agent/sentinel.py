@@ -267,7 +267,10 @@ class SentinelAgent:
                     response_mime_type="application/json",
                     system_instruction=system_prompt,
                     # Enable thinking mode for visible reasoning process
-                    thinking_config=types.ThinkingConfig(thinking_level="high"),
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level="high",
+                        include_thoughts=True  # Include thought summaries in response
+                    ),
                     max_output_tokens=16384  # Increased for detailed responses
                 )
             )
@@ -388,11 +391,13 @@ class SentinelAgent:
                         if thinking_text:
                             logger.info("🧠 AGENT THINKING PROCESS:")
                             # Log each line of thinking for visibility
-                            for line in thinking_text.split('\n')[:20]:  # Limit to first 20 lines
+                            lines = thinking_text.split('\n')
+                            for line in lines[:20]:  # Limit to first 20 lines
                                 if line.strip():
                                     logger.info(f"   💭 {line.strip()}")
-                            if thinking_text.count('\n') > 20:
-                                logger.info(f"   ... ({thinking_text.count(chr(10)) - 20} more lines)")
+                            total_lines = len(lines)
+                            if total_lines > 20:
+                                logger.info(f"   ... ({total_lines - 20} more lines)")
                             return
         except Exception as e:
             logger.debug(f"Could not extract thinking tokens: {e}")
