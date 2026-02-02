@@ -148,7 +148,7 @@ class GroundTruthTracker:
     
     # Position matching tolerance
     # NOTE: Coordinates are in arcseconds from field center
-    # FOV is 10 arcsec, so 1 arcsec tolerance is ~10% of field
+    # FOV is 10 arcsec, so 2 arcsec tolerance is ~20% of field
     MATCH_RADIUS_ARCSEC = 2.0  # arcsec tolerance for matching (accounts for centroid offset)
     
     def __init__(self, reveal_mode: bool = False):
