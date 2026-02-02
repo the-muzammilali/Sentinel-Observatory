@@ -63,7 +63,7 @@ class SentinelAgent:
         session_active: Whether a chat session is currently active
     """
     
-    DEFAULT_MODEL = "gemini-2.0-flash"
+    DEFAULT_MODEL = "gemini-3.0-flash"
     MAX_IMAGE_SIZE = 4096  # Gemini max dimension
     
     def __init__(
@@ -81,7 +81,7 @@ class SentinelAgent:
         Args:
             api_key: Single Google API key. If None, loads from env.
             api_keys: List of API keys for rotation. Takes precedence over api_key.
-            model_name: Gemini model name. Defaults to gemini-2.0-flash.
+            model_name: Gemini model name. Defaults to gemini-3.0-flash.
             temperature: Sampling temperature (0.0-1.0). Lower = more consistent.
             max_retries: Maximum API retry attempts.
             retry_delay: Base delay between retries in seconds.
@@ -265,7 +265,10 @@ class SentinelAgent:
                 config=types.GenerateContentConfig(
                     temperature=self.temperature,
                     response_mime_type="application/json",
-                    system_instruction=system_prompt
+                    system_instruction=system_prompt,
+                    # Enable thinking mode for visible reasoning process
+                    thinking_config=types.ThinkingConfig(thinking_level="high"),
+                    max_output_tokens=16384  # Increased for detailed responses
                 )
             )
             self.session_active = True
@@ -318,6 +321,9 @@ class SentinelAgent:
                 
                 response = self.chat_session.send_message(contents)
                 response_text = response.text
+                
+                # Extract and log thinking tokens for visibility
+                self._log_thinking_process(response)
                 break
             except Exception as e:
                 last_error = e
@@ -355,6 +361,41 @@ class SentinelAgent:
         
         # Parse response
         return self._parse_response(response_text, context)
+    
+    def _log_thinking_process(self, response) -> None:
+        """
+        Extract and log the thinking tokens from Gemini response.
+        
+        This makes the model's reasoning process visible in OODA logs,
+        which is valuable for judges to see how the agent analyzes observations.
+        
+        Args:
+            response: The Gemini API response object
+        """
+        try:
+            # Check if response has candidates with thinking content
+            if not hasattr(response, 'candidates') or not response.candidates:
+                return
+            
+            for candidate in response.candidates:
+                if not hasattr(candidate, 'content') or not candidate.content:
+                    continue
+                    
+                for part in candidate.content.parts:
+                    # Check for thinking part (thought=True indicates thinking content)
+                    if hasattr(part, 'thought') and part.thought:
+                        thinking_text = getattr(part, 'text', '')
+                        if thinking_text:
+                            logger.info("🧠 AGENT THINKING PROCESS:")
+                            # Log each line of thinking for visibility
+                            for line in thinking_text.split('\n')[:20]:  # Limit to first 20 lines
+                                if line.strip():
+                                    logger.info(f"   💭 {line.strip()}")
+                            if thinking_text.count('\n') > 20:
+                                logger.info(f"   ... ({thinking_text.count(chr(10)) - 20} more lines)")
+                            return
+        except Exception as e:
+            logger.debug(f"Could not extract thinking tokens: {e}")
     
     def _replay_context_to_session(self, history: List[dict]) -> None:
         """
