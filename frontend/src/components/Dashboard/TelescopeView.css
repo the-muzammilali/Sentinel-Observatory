@@ -1,0 +1,287 @@
+.telescope-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.panel-actions .btn-icon.active {
+  background: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.zoom-level {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+}
+
+.telescope-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  /* Deep space gradient background */
+  background: radial-gradient(ellipse at center, #0a0f1a 0%, #050810 100%);
+}
+
+/* Space background with animated stars */
+.space-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stars {
+  position: absolute;
+  inset: 0;
+}
+
+.stars-small {
+  background-image: 
+    radial-gradient(2px 2px at 10% 20%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 30% 40%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 50% 10%, rgba(255,255,255,1) 0%, transparent 100%),
+    radial-gradient(2px 2px at 70% 60%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 90% 30%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 15% 80%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 45% 70%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 75% 90%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 25% 55%, rgba(255,255,255,1) 0%, transparent 100%),
+    radial-gradient(2px 2px at 85% 15%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 5% 65%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 55% 85%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(2px 2px at 35% 25%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 95% 75%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 65% 45%, rgba(255,255,255,0.8) 0%, transparent 100%);
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+.stars-medium {
+  background-image: 
+    radial-gradient(3px 3px at 20% 30%, rgba(180,200,255,1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 60% 70%, rgba(180,200,255,0.9) 0%, transparent 100%),
+    radial-gradient(3px 3px at 80% 20%, rgba(255,220,180,1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 40% 80%, rgba(180,200,255,0.9) 0%, transparent 100%),
+    radial-gradient(3px 3px at 5% 50%, rgba(180,200,255,1) 0%, transparent 100%),
+    radial-gradient(4px 4px at 92% 45%, rgba(255,200,150,1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 12% 92%, rgba(180,200,255,0.9) 0%, transparent 100%),
+    radial-gradient(3px 3px at 78% 8%, rgba(180,200,255,1) 0%, transparent 100%);
+  animation: twinkle 4s ease-in-out infinite reverse;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Vignette overlay - gradient from edges to center */
+.vignette-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 30%,
+    rgba(5, 8, 16, 0.3) 60%,
+    rgba(5, 8, 16, 0.7) 85%,
+    rgba(5, 8, 16, 0.95) 100%
+  );
+  z-index: 1;
+}
+
+/* Pan cursor states */
+.telescope-content.pan-mode {
+  cursor: grab;
+}
+
+.telescope-content.is-dragging {
+  cursor: grabbing;
+}
+
+/* Zoom controls grouping */
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Disabled button state */
+.panel-actions .btn-icon.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.image-container {
+  position: relative;
+  transition: transform var(--transition-normal);
+  transform-origin: center;
+  z-index: 2;
+}
+
+/* Disable transition during dragging for smooth movement */
+.telescope-content.is-dragging .image-container {
+  transition: none;
+}
+
+/* Pan mode indicator */
+.pan-mode-indicator {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: rgba(0, 200, 150, 0.2);
+  border: 1px solid var(--accent-success);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--accent-success);
+  z-index: 15;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.telescope-image {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-sm);
+  image-rendering: pixelated;
+  user-select: none;
+  -webkit-user-drag: none;
+  box-shadow: 
+    0 0 40px rgba(100, 140, 255, 0.1),
+    0 0 80px rgba(100, 140, 255, 0.05);
+}
+
+.image-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--accent-warning);
+  color: var(--text-inverse);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  border-radius: var(--radius-sm);
+}
+
+/* Pan hint */
+.pan-hint {
+  position: absolute;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  z-index: 10;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  z-index: 2;
+}
+
+.placeholder-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: rgba(5, 8, 16, 0.85);
+  z-index: 20;
+  backdrop-filter: blur(4px);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-default);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.telescope-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.footer-iteration {
+  font-family: var(--font-mono);
+}
