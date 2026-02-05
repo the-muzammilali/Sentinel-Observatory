@@ -17,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 
+from src.utils.session_recorder import SessionRecorder
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -312,26 +314,73 @@ async def get_ground_truth():
 
 @app.get("/api/executions")
 async def get_executions():
-    """Get list of saved marathon executions for playback."""
-    # TODO: Read from execution storage
-    executions_dir = Path("logs/marathons")
-    if not executions_dir.exists():
-        return {"executions": []}
+    """Get list of saved marathon executions for playback (legacy endpoint)."""
+    # Redirect to new sessions endpoint for backwards compatibility
+    sessions = SessionRecorder.list_sessions()
+    return {
+        "executions": [
+            {
+                "id": s["session_id"],
+                "timestamp": s["start_time"],
+                "total_iterations": s["total_iterations"],
+                "confirmed_count": s.get("confirmed_count", 0),
+            }
+            for s in sessions[:20]
+        ]
+    }
+
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """Get list of all recorded sessions."""
+    sessions = SessionRecorder.list_sessions()
+    return {"sessions": sessions}
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    """Get session details by ID."""
+    session = SessionRecorder.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
+@app.get("/api/sessions/{session_id}/iterations/{iteration_num}")
+async def get_session_iteration(session_id: str, iteration_num: int):
+    """Get iteration data for a session."""
+    iteration = SessionRecorder.get_iteration(session_id, iteration_num)
+    if not iteration:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Iteration {iteration_num} not found in session {session_id}"
+        )
+    return iteration
+
+
+@app.get("/api/sessions/{session_id}/iterations/{iteration_num}/image")
+async def get_session_iteration_image(session_id: str, iteration_num: int):
+    """Get iteration image for a session."""
+    from PIL import Image
+    import io
     
-    executions = []
-    for f in sorted(executions_dir.glob("*.json"), reverse=True)[:20]:
-        try:
-            data = json.loads(f.read_text())
-            executions.append({
-                "id": f.stem,
-                "timestamp": data.get("start_time", f.stat().st_mtime),
-                "total_iterations": data.get("total_iterations", 0),
-                "confirmed_count": len([c for c in data.get("candidates", []) if c.get("status") == "CONFIRMED"]),
-            })
-        except Exception as e:
-            logger.warning(f"Failed to read execution {f}: {e}")
+    image_path = SessionRecorder.get_image_path(session_id, iteration_num)
+    if not image_path:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Image not found for iteration {iteration_num} in session {session_id}"
+        )
     
-    return {"executions": executions}
+    img = Image.open(image_path)
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "max-age=3600"}
+    )
 
 # ============================================================================
 # WEBSOCKET ENDPOINT
@@ -452,8 +501,12 @@ async def emit_log_message(message_type: str, content: str, **kwargs):
 
 async def run_marathon_async(config: MarathonConfig):
     """Run marathon asynchronously with real-time updates."""
+    # Initialize session recorder
+    recorder = SessionRecorder()
+    session_id = recorder.start_session(config.model_dump())
+    
     try:
-        logger.info(f"Starting marathon with config: {config}")
+        logger.info(f"Starting marathon with config: {config} (session: {session_id})")
         
         # Import OODA loop (lazy import to avoid startup delay)
         from src.ooda_loop import OODALoop, LoopConfig
@@ -570,6 +623,15 @@ async def run_marathon_async(config: MarathonConfig):
                 "alerts_triggered": context.alerts_triggered if context else 0,
             }
             
+            # Record iteration for playback
+            iteration_num = i + 1
+            image_path = f"data/observations/iteration_{iteration_num:03d}.png"
+            recorder.record_iteration(
+                iteration=iteration_num,
+                context_state=marathon_state.context_state,
+                source_image_path=image_path,
+            )
+            
             # Broadcast update
             await broadcast_state_update()
             await broadcast_iteration_complete(i + 1, marathon_state.context_state)
@@ -578,9 +640,10 @@ async def run_marathon_async(config: MarathonConfig):
             await asyncio.sleep(0.5)
         
         # Get ground truth metrics if available
+        ground_truth_summary = None
         if ooda._ground_truth:
             metrics = ooda._ground_truth.finalize_metrics()
-            marathon_state.context_state["ground_truth"] = {
+            ground_truth_summary = {
                 "precision": metrics.precision,
                 "recall": metrics.recall,
                 "f1_score": metrics.f1_score,
@@ -588,14 +651,18 @@ async def run_marathon_async(config: MarathonConfig):
                 "false_positives": metrics.false_positives,
                 "false_negatives": metrics.false_negatives,
             }
+            marathon_state.context_state["ground_truth"] = ground_truth_summary
+        
+        # Finalize session recording
+        recorder.finalize_session(ground_truth_summary)
         
         # Marathon complete
         marathon_state.is_running = False
         marathon_state.status = "completed"
-        await emit_log_message("info", f"Marathon completed! {marathon_state.current_iteration} iterations finished.")
+        await emit_log_message("info", f"Marathon completed! {marathon_state.current_iteration} iterations finished. Session saved: {session_id}")
         await broadcast_state_update()
         
-        logger.info("Marathon completed successfully")
+        logger.info(f"Marathon completed successfully. Session: {session_id}")
         
     except Exception as e:
         logger.error(f"Marathon error: {e}")
@@ -605,6 +672,12 @@ async def run_marathon_async(config: MarathonConfig):
         marathon_state.status = "error"
         await emit_log_message("error", f"Marathon error: {str(e)}")
         await broadcast_state_update()
+        
+        # Still try to finalize the session even on error
+        try:
+            recorder.finalize_session()
+        except Exception:
+            pass
 
 
 # ============================================================================

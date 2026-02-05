@@ -1,0 +1,38 @@
+{
+  "iteration": 1,
+  "timestamp": "2026-02-04T20:25:23.524230",
+  "simulated_time": "2026-02-04T20:53:39.089693",
+  "weather": {
+    "seeing": 0.9510833919048309,
+    "cloud_extinction": 0.16157924234867097,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 660,
+      "y": 850,
+      "status": "NEW",
+      "confidence": 0.85,
+      "observations": 1,
+      "hypothesis": "Possible Supernova or Nova",
+      "history": [
+        {
+          "time": "2026-02-04T20:23:39.089693",
+          "magnitude": null,
+          "confidence": 0.85,
+          "note": "Initial detection in difference image; clear point source profile."
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "Detected a clear new point source in the bottom-right quadrant of the difference image that is absent in the reference. Weather conditions are good, so a follow-up observation is required to confirm this is a real transient and not a cosmic ray or moving object.",
+    "confidence": 0.85
+  },
+  "num_detections": 1,
+  "alerts_triggered": 0,
+  "ground_truth": null,
+  "image_filename": "iteration_001.png"
+}

@@ -1,0 +1,38 @@
+{
+  "iteration": 1,
+  "timestamp": "2026-02-04T20:42:01.760526",
+  "simulated_time": "2026-02-04T21:09:38.733806",
+  "weather": {
+    "seeing": 0.9510833919048309,
+    "cloud_extinction": 0.16157924234867097,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 659,
+      "y": 853,
+      "status": "NEW",
+      "confidence": 0.85,
+      "observations": 1,
+      "hypothesis": "Potential transient",
+      "history": [
+        {
+          "time": "2026-02-04T20:39:38.733806",
+          "magnitude": null,
+          "confidence": 0.85,
+          "note": "First detection in difference image."
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "Detected a new point source at [659, 853] in the difference image that is absent in the reference. Weather conditions are good, so I will re-observe to confirm the detection and rule out artifacts.",
+    "confidence": 0.85
+  },
+  "num_detections": 1,
+  "alerts_triggered": 0,
+  "ground_truth": null,
+  "image_filename": "iteration_001.png"
+}

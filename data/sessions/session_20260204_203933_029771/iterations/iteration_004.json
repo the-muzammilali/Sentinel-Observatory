@@ -1,0 +1,56 @@
+{
+  "iteration": 4,
+  "timestamp": "2026-02-04T20:55:34.852603",
+  "simulated_time": "2026-02-04T22:39:38.733806",
+  "weather": {
+    "seeing": 0.9966719958465546,
+    "cloud_extinction": 0.2,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 659,
+      "y": 853,
+      "status": "CONFIRMED",
+      "confidence": 0.98,
+      "observations": 4,
+      "hypothesis": "Supernova candidate",
+      "history": [
+        {
+          "time": "2026-02-04T20:39:38.733806",
+          "magnitude": null,
+          "confidence": 0.7,
+          "note": "Initial detection of new point source."
+        },
+        {
+          "time": "2026-02-04T21:09:38.733806",
+          "magnitude": null,
+          "confidence": 0.85,
+          "note": "Second detection, confirmed persistence."
+        },
+        {
+          "time": "2026-02-04T21:39:38.733806",
+          "magnitude": 18.1,
+          "confidence": 0.95,
+          "note": "Third detection, alert triggered."
+        },
+        {
+          "time": "2026-02-04T22:09:38.733806",
+          "magnitude": 18.0,
+          "confidence": 0.98,
+          "note": "Fourth detection, monitoring light curve."
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "CAND_01 remains clearly visible at [659, 853] for the fourth consecutive observation. The source is a stable point source in the difference image, confirming its astronomical nature. Continued monitoring is required to characterize the light curve for precise classification.",
+    "confidence": 0.98
+  },
+  "num_detections": 1,
+  "alerts_triggered": 1,
+  "ground_truth": null,
+  "image_filename": "iteration_004.png"
+}

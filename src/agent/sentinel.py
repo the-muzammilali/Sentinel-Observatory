@@ -332,8 +332,9 @@ class SentinelAgent:
                 last_error = e
                 logger.warning(f"Chat send attempt {attempt + 1} failed: {e}")
                 
-                # Try rotating API key if rate limited
-                if "429" in str(e) or "quota" in str(e).lower():
+                # Try rotating API key if rate limited or overloaded
+                error_str = str(e).lower()
+                if "429" in str(e) or "quota" in error_str or "503" in str(e) or "overload" in error_str or "unavailable" in error_str or "resource_exhausted" in error_str:
                     if self._rotate_api_key():
                         # Preserve history and replay context to new session
                         preserved_history = self.conversation_history.copy()

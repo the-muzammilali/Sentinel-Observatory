@@ -1,0 +1,25 @@
+{
+  "session_id": "session_20260204_203933_029771",
+  "start_time": "2026-02-04T20:39:33.029771",
+  "end_time": "2026-02-04T20:55:36.044791",
+  "config": {
+    "max_iterations": 4,
+    "num_stars": 100,
+    "num_transients": 2,
+    "inject_false_positives": true,
+    "false_positive_rate": 0.3,
+    "step_interval_hours": 0.5
+  },
+  "total_iterations": 4,
+  "completed": true,
+  "confirmed_count": 2,
+  "rejected_count": 0,
+  "ground_truth_summary": {
+    "precision": 1.0,
+    "recall": 0.5,
+    "f1_score": 0.6666666666666666,
+    "true_positives": 1,
+    "false_positives": 0,
+    "false_negatives": 1
+  }
+}

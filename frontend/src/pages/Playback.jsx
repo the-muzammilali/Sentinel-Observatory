@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   History,
   Play,
@@ -10,40 +10,95 @@ import {
   Calendar,
   Clock,
   Target,
+  Cloud,
+  Eye,
+  Brain,
+  AlertTriangle,
+  List,
+  X,
 } from 'lucide-react'
 import './Playback.css'
 
 function Playback() {
-  const [executions, setExecutions] = useState([])
-  const [selectedExecution, setSelectedExecution] = useState(null)
-  const [currentIteration, setCurrentIteration] = useState(0)
+  const [sessions, setSessions] = useState([])
+  const [selectedSession, setSelectedSession] = useState(null)
+  const [currentIteration, setCurrentIteration] = useState(1)
+  const [iterationData, setIterationData] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [showSessionList, setShowSessionList] = useState(true)
+  
+  // Image preloading for instant switching
+  const [preloadedImages, setPreloadedImages] = useState({})
+  const currentImageRef = useRef(null)
+  const containerRef = useRef(null)
 
-  // Fetch stored executions
+  // Fetch saved sessions
   useEffect(() => {
-    const fetchExecutions = async () => {
+    const fetchSessions = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/executions')
+        const response = await fetch('http://localhost:8000/api/sessions')
         if (response.ok) {
           const data = await response.json()
-          setExecutions(data.executions || [])
+          setSessions(data.sessions || [])
         }
       } catch (error) {
-        console.error('Failed to fetch executions:', error)
+        console.error('Failed to fetch sessions:', error)
       }
     }
-
-    fetchExecutions()
+    fetchSessions()
   }, [])
+
+  // Fetch iteration data when iteration changes (no loading state for smooth transitions)
+  useEffect(() => {
+    if (!selectedSession || !currentIteration) return
+
+    const fetchIterationData = async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:8000/api/sessions/${selectedSession.session_id}/iterations/${currentIteration}`
+        )
+        if (response.ok) {
+          const data = await response.json()
+          setIterationData(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch iteration data:', error)
+      }
+    }
+    fetchIterationData()
+  }, [selectedSession, currentIteration])
+
+  // Preload all session images when session is selected
+  useEffect(() => {
+    if (!selectedSession) return
+
+    const preloadAllImages = async () => {
+      const images = {}
+      for (let i = 1; i <= selectedSession.total_iterations; i++) {
+        const url = `http://localhost:8000/api/sessions/${selectedSession.session_id}/iterations/${i}/image`
+        const img = new Image()
+        img.src = url
+        images[i] = url
+      }
+      setPreloadedImages(images)
+    }
+    preloadAllImages()
+  }, [selectedSession])
+
+  // Get current image URL from preloaded cache
+  const currentImageUrl = selectedSession ? 
+    preloadedImages[currentIteration] || 
+    `http://localhost:8000/api/sessions/${selectedSession.session_id}/iterations/${currentIteration}/image` 
+    : null
 
   // Auto-advance playback
   useEffect(() => {
-    if (!isPlaying || !selectedExecution) return
+    if (!isPlaying || !selectedSession) return
 
     const interval = setInterval(() => {
       setCurrentIteration(prev => {
-        if (prev >= selectedExecution.total_iterations - 1) {
+        if (prev >= selectedSession.total_iterations) {
           setIsPlaying(false)
           return prev
         }
@@ -52,144 +107,303 @@ function Playback() {
     }, 2000 / playbackSpeed)
 
     return () => clearInterval(interval)
-  }, [isPlaying, selectedExecution, playbackSpeed])
+  }, [isPlaying, selectedSession, playbackSpeed])
 
-  const handleSelectExecution = (execution) => {
-    setSelectedExecution(execution)
-    setCurrentIteration(0)
+  const handleSelectSession = useCallback((session) => {
+    setSelectedSession(session)
+    setCurrentIteration(1)
     setIsPlaying(false)
-  }
+    setIterationData(null)
+    setPreloadedImages({})
+    setShowSessionList(false)
+  }, [])
 
-  const handlePlayPause = () => setIsPlaying(!isPlaying)
-  const handlePrev = () => setCurrentIteration(prev => Math.max(0, prev - 1))
-  const handleNext = () => {
-    if (selectedExecution) {
-      setCurrentIteration(prev => Math.min(selectedExecution.total_iterations - 1, prev + 1))
+  const handlePlayPause = useCallback(() => setIsPlaying(p => !p), [])
+  
+  const handlePrev = useCallback(() => {
+    setCurrentIteration(prev => Math.max(1, prev - 1))
+  }, [])
+  
+  const handleNext = useCallback(() => {
+    if (selectedSession) {
+      setCurrentIteration(prev => Math.min(selectedSession.total_iterations, prev + 1))
+    }
+  }, [selectedSession])
+
+  const handleSliderChange = useCallback((e) => {
+    setCurrentIteration(Number(e.target.value))
+    setIsPlaying(false)
+  }, [])
+
+  const formatDate = (dateStr) => {
+    try {
+      return new Date(dateStr).toLocaleString()
+    } catch {
+      return dateStr
     }
   }
-  const handleReset = () => setCurrentIteration(0)
 
-  return (
-    <div className="playback-page">
-      <div className="playback-header">
-        <h1>
-          <History size={24} />
-          Marathon Playback
-        </h1>
-        <p>Replay past observation sessions and analyze agent decisions</p>
-      </div>
+  const getStatusColor = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'CONFIRMED': return 'var(--accent-success)'
+      case 'REJECTED': return 'var(--accent-error)'
+      case 'PENDING': return 'var(--accent-warning)'
+      default: return 'var(--text-muted)'
+    }
+  }
 
-      <div className="playback-content">
-        {/* Execution list */}
-        <div className="execution-list card">
-          <div className="card-header">
-            <span className="card-title">Saved Sessions</span>
-          </div>
-          <div className="execution-items">
-            {executions.length === 0 ? (
-              <div className="empty-state">
-                <History size={32} />
-                <p>No saved sessions yet</p>
-                <span>Run a marathon to create recordings</span>
-              </div>
-            ) : (
-              executions.map(exec => (
-                <div
-                  key={exec.id}
-                  className={`execution-item ${selectedExecution?.id === exec.id ? 'selected' : ''}`}
-                  onClick={() => handleSelectExecution(exec)}
-                >
-                  <div className="execution-info">
-                    <div className="execution-date">
-                      <Calendar size={14} />
-                      {new Date(exec.timestamp).toLocaleDateString()}
-                    </div>
-                    <div className="execution-stats">
-                      <span><Clock size={12} /> {exec.total_iterations} iterations</span>
-                      <span><Target size={12} /> {exec.confirmed_count} confirmed</span>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="chevron" />
+  // No session selected - show session picker
+  if (!selectedSession) {
+    return (
+      <div className="playback-page" ref={containerRef}>
+        <div className="playback-header">
+          <h1><History size={24} /> Marathon Playback</h1>
+          <p>Select a recorded session to replay</p>
+        </div>
+        
+        <div className="session-grid">
+          {sessions.length === 0 ? (
+            <div className="empty-state-large">
+              <History size={64} />
+              <h2>No Recorded Sessions</h2>
+              <p>Run a marathon from the Dashboard to create recordings</p>
+            </div>
+          ) : (
+            sessions.map(session => (
+              <div
+                key={session.session_id}
+                className="session-card"
+                onClick={() => handleSelectSession(session)}
+              >
+                <div className="session-card-header">
+                  <Calendar size={16} />
+                  <span>{formatDate(session.start_time)}</span>
                 </div>
-              ))
+                <div className="session-card-stats">
+                  <div className="stat">
+                    <Clock size={14} />
+                    <span>{session.total_iterations} iterations</span>
+                  </div>
+                  <div className="stat">
+                    <Target size={14} />
+                    <span>{session.confirmed_count || 0} confirmed</span>
+                  </div>
+                </div>
+                <button className="btn btn-primary session-play-btn">
+                  <Play size={16} /> Replay Session
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Session selected - show dashboard-like playback view
+  return (
+    <div className="playback-dashboard" ref={containerRef}>
+      {/* Top row: Telescope View + Data Panels */}
+      <div className="playback-row playback-row-main">
+        {/* Telescope Panel */}
+        <div className="playback-panel telescope-panel">
+          <div className="panel-header">
+            <span className="panel-title">
+              <Eye size={16} /> Telescope View
+            </span>
+            <span className="iteration-badge">
+              Iteration {currentIteration} / {selectedSession.total_iterations}
+            </span>
+          </div>
+          <div className="panel-content telescope-content">
+            {currentImageUrl ? (
+              <img
+                ref={currentImageRef}
+                src={currentImageUrl}
+                alt={`Iteration ${currentIteration}`}
+                className="telescope-image"
+              />
+            ) : (
+              <div className="no-image">No image available</div>
             )}
           </div>
         </div>
 
-        {/* Playback viewer */}
-        <div className="playback-viewer card">
-          {!selectedExecution ? (
-            <div className="empty-state">
-              <Play size={48} />
-              <p>Select a session to begin playback</p>
+        {/* Agent Decision Panel */}
+        <div className="playback-panel agent-panel">
+          <div className="panel-header">
+            <span className="panel-title">
+              <Brain size={16} /> Agent Decision
+            </span>
+          </div>
+          <div className="panel-content">
+            {iterationData?.decision ? (
+              <div className="agent-decision">
+                <div className="decision-action-row">
+                  <span className="decision-action">{iterationData.decision.action}</span>
+                  <span className="decision-confidence">
+                    {((iterationData.decision.confidence || 0) * 100).toFixed(0)}% confidence
+                  </span>
+                </div>
+                {iterationData.decision.reasoning && (
+                  <div className="decision-reasoning">
+                    <h4>Reasoning</h4>
+                    <p>{iterationData.decision.reasoning}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="no-data">No decision data</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Playback Controls Row */}
+      <div className="playback-row playback-row-controls">
+        <div className="playback-controls-bar">
+          <button 
+            className="btn btn-ghost"
+            onClick={() => setSelectedSession(null)}
+            title="Back to sessions"
+          >
+            <X size={18} /> Exit
+          </button>
+
+          <div className="controls-center">
+            <button className="btn btn-icon" onClick={() => setCurrentIteration(1)} title="First">
+              <SkipBack size={18} />
+            </button>
+            <button className="btn btn-icon" onClick={handlePrev} title="Previous">
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              className={`btn btn-primary play-btn ${isPlaying ? 'playing' : ''}`}
+              onClick={handlePlayPause}
+            >
+              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            </button>
+            <button className="btn btn-icon" onClick={handleNext} title="Next">
+              <ChevronRight size={20} />
+            </button>
+            <button
+              className="btn btn-icon"
+              onClick={() => setCurrentIteration(selectedSession.total_iterations)}
+              title="Last"
+            >
+              <SkipForward size={18} />
+            </button>
+          </div>
+
+          <div className="speed-control">
+            <span>Speed:</span>
+            <select
+              value={playbackSpeed}
+              onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+            >
+              <option value={0.5}>0.5x</option>
+              <option value={1}>1x</option>
+              <option value={2}>2x</option>
+              <option value={4}>4x</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Progress Slider */}
+        <div className="progress-bar-container">
+          <span className="progress-label">{currentIteration}</span>
+          <input
+            type="range"
+            min={1}
+            max={selectedSession.total_iterations}
+            value={currentIteration}
+            onChange={handleSliderChange}
+            className="progress-slider"
+          />
+          <span className="progress-label">{selectedSession.total_iterations}</span>
+        </div>
+      </div>
+
+      {/* Bottom row: Weather + Candidates + Metrics */}
+      <div className="playback-row playback-row-bottom">
+        {/* Weather Panel */}
+        <div className="playback-panel weather-panel">
+          <div className="panel-header">
+            <span className="panel-title"><Cloud size={16} /> Weather</span>
+          </div>
+          <div className="panel-content">
+            {iterationData?.weather ? (
+              <div className="weather-grid">
+                <div className="weather-item">
+                  <span className="weather-label">Seeing</span>
+                  <span className="weather-value">{iterationData.weather.seeing?.toFixed(2)}"</span>
+                </div>
+                <div className="weather-item">
+                  <span className="weather-label">Clouds</span>
+                  <span className="weather-value">
+                    {((iterationData.weather.cloud_extinction || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="weather-item">
+                  <span className="weather-label">Status</span>
+                  <span className={`weather-status ${iterationData.weather.observability?.toLowerCase()}`}>
+                    {iterationData.weather.observability || 'GOOD'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="no-data">No weather data</div>
+            )}
+          </div>
+        </div>
+
+        {/* Candidates Panel */}
+        <div className="playback-panel candidates-panel">
+          <div className="panel-header">
+            <span className="panel-title">
+              <Target size={16} /> Candidates ({iterationData?.candidates?.length || 0})
+            </span>
+          </div>
+          <div className="panel-content candidates-list">
+            {iterationData?.candidates?.length > 0 ? (
+              iterationData.candidates.map((c, idx) => (
+                <div key={c.id || idx} className="candidate-item">
+                  <span 
+                    className="candidate-status-dot"
+                    style={{ backgroundColor: getStatusColor(c.status) }}
+                  />
+                  <span className="candidate-id">{c.id?.slice(0, 8) || `C${idx + 1}`}</span>
+                  <span className="candidate-status" style={{ color: getStatusColor(c.status) }}>
+                    {c.status}
+                  </span>
+                  <span className="candidate-confidence">
+                    {((c.confidence || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="no-data">No candidates</div>
+            )}
+          </div>
+        </div>
+
+        {/* Session Info Panel */}
+        <div className="playback-panel info-panel">
+          <div className="panel-header">
+            <span className="panel-title"><History size={16} /> Session Info</span>
+          </div>
+          <div className="panel-content">
+            <div className="info-grid">
+              <span className="info-label">Started</span>
+              <span className="info-value">{formatDate(selectedSession.start_time)}</span>
+              <span className="info-label">Iterations</span>
+              <span className="info-value">{selectedSession.total_iterations}</span>
+              <span className="info-label">Confirmed</span>
+              <span className="info-value confirmed">{selectedSession.confirmed_count || 0}</span>
+              <span className="info-label">Rejected</span>
+              <span className="info-value rejected">{selectedSession.rejected_count || 0}</span>
             </div>
-          ) : (
-            <>
-              <div className="viewer-header">
-                <h3>Session: {new Date(selectedExecution.timestamp).toLocaleString()}</h3>
-                <span className="iteration-display">
-                  Iteration {currentIteration + 1} / {selectedExecution.total_iterations}
-                </span>
-              </div>
-
-              <div className="viewer-content">
-                {/* Placeholder for iteration data */}
-                <div className="iteration-preview">
-                  <p>Iteration {currentIteration + 1} data would display here</p>
-                  <p className="hint">Showing agent decisions, images, and candidates</p>
-                </div>
-              </div>
-
-              <div className="playback-controls">
-                <button className="btn btn-icon" onClick={handleReset} title="Reset">
-                  <SkipBack size={18} />
-                </button>
-                <button className="btn btn-icon" onClick={handlePrev} title="Previous">
-                  <ChevronLeft size={18} />
-                </button>
-                <button
-                  className={`btn btn-primary play-btn ${isPlaying ? 'playing' : ''}`}
-                  onClick={handlePlayPause}
-                >
-                  {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                </button>
-                <button className="btn btn-icon" onClick={handleNext} title="Next">
-                  <ChevronRight size={18} />
-                </button>
-                <button
-                  className="btn btn-icon"
-                  onClick={() => setCurrentIteration(selectedExecution.total_iterations - 1)}
-                  title="End"
-                >
-                  <SkipForward size={18} />
-                </button>
-
-                <div className="speed-control">
-                  <span>Speed:</span>
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                  >
-                    <option value={0.5}>0.5x</option>
-                    <option value={1}>1x</option>
-                    <option value={2}>2x</option>
-                    <option value={4}>4x</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="playback-progress">
-                <input
-                  type="range"
-                  min={0}
-                  max={selectedExecution.total_iterations - 1}
-                  value={currentIteration}
-                  onChange={(e) => setCurrentIteration(Number(e.target.value))}
-                />
-              </div>
-            </>
-          )}
+          </div>
         </div>
       </div>
     </div>
