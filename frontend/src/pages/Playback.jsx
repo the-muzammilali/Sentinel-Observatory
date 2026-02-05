@@ -16,6 +16,10 @@ import {
   AlertTriangle,
   List,
   X,
+  ZoomIn,
+  ZoomOut,
+  Move,
+  RefreshCw,
 } from 'lucide-react'
 import './Playback.css'
 
@@ -26,12 +30,18 @@ function Playback() {
   const [iterationData, setIterationData] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
-  const [showSessionList, setShowSessionList] = useState(true)
   
   // Image preloading for instant switching
   const [preloadedImages, setPreloadedImages] = useState({})
   const currentImageRef = useRef(null)
   const containerRef = useRef(null)
+  
+  // Zoom and pan state
+  const [zoom, setZoom] = useState(1)
+  const [panMode, setPanMode] = useState(false)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
 
   // Fetch saved sessions
   useEffect(() => {
@@ -115,7 +125,6 @@ function Playback() {
     setIsPlaying(false)
     setIterationData(null)
     setPreloadedImages({})
-    setShowSessionList(false)
   }, [])
 
   const handlePlayPause = useCallback(() => setIsPlaying(p => !p), [])
@@ -134,6 +143,56 @@ function Playback() {
     setCurrentIteration(Number(e.target.value))
     setIsPlaying(false)
   }, [])
+
+  // Zoom and pan handlers
+  const handleZoomIn = useCallback(() => setZoom(prev => Math.min(prev + 0.5, 4)), [])
+  const handleZoomOut = useCallback(() => setZoom(prev => Math.max(prev - 0.5, 0.5)), [])
+  const handleResetView = useCallback(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+    setPanMode(false)
+  }, [])
+  const togglePanMode = useCallback(() => setPanMode(prev => !prev), [])
+
+  // Mouse event handlers for pan mode
+  const handleMouseDown = useCallback((e) => {
+    if (!panMode) return
+    e.preventDefault()
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: pan.x,
+      panY: pan.y
+    }
+  }, [panMode, pan])
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return
+    const dx = e.clientX - dragStartRef.current.x
+    const dy = e.clientY - dragStartRef.current.y
+    const maxPan = Math.max(100, (zoom - 1) * 200 + 100)
+    setPan({
+      x: Math.max(-maxPan, Math.min(maxPan, dragStartRef.current.panX + dx)),
+      y: Math.max(-maxPan, Math.min(maxPan, dragStartRef.current.panY + dy))
+    })
+  }, [isDragging, zoom])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Global mouse event listeners for pan
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp])
 
   const formatDate = (dateStr) => {
     try {
@@ -211,18 +270,50 @@ function Playback() {
             <span className="panel-title">
               <Eye size={16} /> Telescope View
             </span>
+            <div className="panel-actions">
+              <div className="zoom-controls">
+                <button className="btn btn-icon" onClick={handleZoomOut} title="Zoom out">
+                  <ZoomOut size={16} />
+                </button>
+                <span className="zoom-level">{(zoom * 100).toFixed(0)}%</span>
+                <button className="btn btn-icon" onClick={handleZoomIn} title="Zoom in">
+                  <ZoomIn size={16} />
+                </button>
+              </div>
+              <button
+                className={`btn btn-icon ${panMode ? 'active' : ''}`}
+                onClick={togglePanMode}
+                title={panMode ? 'Exit pan mode' : 'Enter pan mode'}
+              >
+                <Move size={16} />
+              </button>
+              <button className="btn btn-icon" onClick={handleResetView} title="Reset view">
+                <RefreshCw size={16} />
+              </button>
+            </div>
             <span className="iteration-badge">
               Iteration {currentIteration} / {selectedSession.total_iterations}
             </span>
           </div>
-          <div className="panel-content telescope-content">
+          <div
+            className={`panel-content telescope-content ${panMode ? 'pan-mode' : ''} ${isDragging ? 'is-dragging' : ''}`}
+            onMouseDown={handleMouseDown}
+          >
             {currentImageUrl ? (
-              <img
-                ref={currentImageRef}
-                src={currentImageUrl}
-                alt={`Iteration ${currentIteration}`}
-                className="telescope-image"
-              />
+              <div
+                className="image-container"
+                style={{
+                  transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+                }}
+              >
+                <img
+                  ref={currentImageRef}
+                  src={currentImageUrl}
+                  alt={`Iteration ${currentIteration}`}
+                  className="telescope-image"
+                  draggable={false}
+                />
+              </div>
             ) : (
               <div className="no-image">No image available</div>
             )}
