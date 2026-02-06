@@ -66,6 +66,7 @@ function Dashboard({ marathonState, contextState }) {
         <div className="dashboard-panel telescope-panel">
           <TelescopeView
             marathonState={marathonState}
+            contextState={contextState}
             currentIteration={currentIter}
           />
         </div>

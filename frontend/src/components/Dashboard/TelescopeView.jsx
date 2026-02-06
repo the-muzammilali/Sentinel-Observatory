@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Camera, ZoomIn, ZoomOut, Layers, RefreshCw, Move } from 'lucide-react'
 import './TelescopeView.css'
 
-function TelescopeView({ marathonState, currentIteration }) {
+function TelescopeView({ marathonState, contextState, currentIteration }) {
   const [imageUrl, setImageUrl] = useState(null)
   const [showDiff, setShowDiff] = useState(false)
   const [zoom, setZoom] = useState(1)
@@ -141,6 +141,9 @@ function TelescopeView({ marathonState, currentIteration }) {
 
         {/* Left side controls */}
         <div className="side-controls left-controls">
+          <button className="btn btn-icon side-btn" onClick={handleReset} title="Reset view">
+            <RefreshCw size={18} />
+          </button>
           <button
             className={`btn btn-icon side-btn ${showDiff ? 'active' : ''}`}
             onClick={() => setShowDiff(!showDiff)}
@@ -166,9 +169,6 @@ function TelescopeView({ marathonState, currentIteration }) {
             title={panMode ? 'Exit pan mode' : 'Enter pan mode'}
           >
             <Move size={18} />
-          </button>
-          <button className="btn btn-icon side-btn" onClick={handleReset} title="Reset view">
-            <RefreshCw size={18} />
           </button>
         </div>
         
@@ -210,14 +210,31 @@ function TelescopeView({ marathonState, currentIteration }) {
 
         {/* Bottom info bar */}
         <div className="telescope-info-bar">
-          <span className="info-label">
-            {showDiff ? 'Difference Image' : 'Current Observation'}
-          </span>
-          {currentIteration && (
-            <span className="info-iteration">
-              Iteration {currentIteration}
+          <div className="info-left">
+            <span className="simulated-badge">SIMULATED</span>
+            <span className="simulated-time">
+              {contextState?.simulated_time 
+                ? new Date(contextState.simulated_time).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric', 
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                    timeZoneName: 'short'
+                  })
+                : '--:-- UT'}
             </span>
-          )}
+          </div>
+          <div className="info-right">
+            <span className="info-label">
+              {showDiff ? 'Difference Image' : 'Current Observation'}
+            </span>
+            {currentIteration && (
+              <span className="info-iteration">
+                Iteration {currentIteration}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
