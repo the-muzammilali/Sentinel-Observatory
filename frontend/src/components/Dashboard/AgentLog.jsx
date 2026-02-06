@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Brain, ChevronDown, ChevronRight, Zap } from 'lucide-react'
+import { Brain, ChevronDown, ChevronRight, Zap, Clock } from 'lucide-react'
 import './AgentLog.css'
 
 function AgentLog({ marathonState }) {
@@ -17,6 +17,9 @@ function AgentLog({ marathonState }) {
 
   // Handle incoming log messages
   const handleLogMessage = useCallback((data) => {
+    // Use sim_time from backend, or iteration-based fallback
+    const simTime = data.sim_time || `Iter ${data.iteration || '?'}`
+    
     switch (data.type) {
       case 'thinking':
         // Streaming token - update current thinking log
@@ -33,7 +36,7 @@ function AgentLog({ marathonState }) {
             type: 'thinking',
             iteration: data.iteration,
             content: data.content,
-            timestamp: new Date().toISOString(),
+            simTime: simTime,
           }]
         })
         break
@@ -44,20 +47,42 @@ function AgentLog({ marathonState }) {
           type: 'deliberation',
           iteration: data.iteration,
           content: data.content,
-          timestamp: new Date().toISOString(),
+          simTime: simTime,
+          // Action/confidence will be updated by subsequent decision event
+          action: null,
+          confidence: null,
         }])
         break
       
       case 'decision':
-        setLogs(prev => [...prev, {
-          id: getNextLogId(),
-          type: 'decision',
-          iteration: data.iteration,
-          action: data.action,
-          reasoning: data.reasoning,
-          confidence: data.confidence,
-          timestamp: new Date().toISOString(),
-        }])
+        // Update the most recent deliberation with action/confidence info
+        setLogs(prev => {
+          const lastDelibIdx = [...prev].reverse().findIndex(
+            log => log.type === 'deliberation' && log.iteration === data.iteration
+          )
+          
+          if (lastDelibIdx >= 0) {
+            const idx = prev.length - 1 - lastDelibIdx
+            const updated = [...prev]
+            updated[idx] = {
+              ...updated[idx],
+              action: data.action,
+              confidence: data.confidence,
+            }
+            return updated
+          }
+          
+          // Fallback: create standalone decision entry if no matching deliberation
+          return [...prev, {
+            id: getNextLogId(),
+            type: 'decision',
+            iteration: data.iteration,
+            action: data.action,
+            reasoning: data.reasoning,
+            confidence: data.confidence,
+            simTime: simTime,
+          }]
+        })
         break
       
       default:
@@ -65,7 +90,7 @@ function AgentLog({ marathonState }) {
           id: getNextLogId(),
           type: 'info',
           content: data.content || JSON.stringify(data),
-          timestamp: new Date().toISOString(),
+          simTime: simTime,
         }])
     }
   }, [getNextLogId])
@@ -111,14 +136,22 @@ function AgentLog({ marathonState }) {
     }))
   }
 
-  const getActionColor = (action) => {
-    switch (action) {
-      case 'observe_again': return 'var(--accent-info)'
-      case 'slew_to': return 'var(--accent-secondary)'
-      case 'trigger_alert': return 'var(--accent-success)'
-      case 'wait': return 'var(--accent-warning)'
-      default: return 'var(--text-muted)'
-    }
+  const getActionBadgeClass = (action) => {
+    if (action?.includes('observe')) return 'observe'
+    if (action?.includes('slew')) return 'slew'
+    if (action?.includes('alert') || action?.includes('trigger')) return 'alert'
+    if (action?.includes('wait')) return 'wait'
+    return 'default'
+  }
+
+  const getConfidenceClass = (confidence) => {
+    if (confidence >= 0.8) return 'high'
+    if (confidence >= 0.5) return 'medium'
+    return 'low'
+  }
+
+  const formatAction = (action) => {
+    return action?.replace(/_/g, ' ') || 'unknown'
   }
 
   return (
@@ -156,14 +189,23 @@ function AgentLog({ marathonState }) {
                     onClick={() => toggleExpand(log.id)}
                   >
                     {expandedLogs[log.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <Zap size={14} style={{ color: getActionColor(log.action) }} />
-                    <span className="log-action" style={{ color: getActionColor(log.action) }}>
-                      {log.action?.toUpperCase()}
+                    <span className={`action-badge ${getActionBadgeClass(log.action)}`}>
+                      <Zap size={10} />
+                      {formatAction(log.action)}
                     </span>
-                    <span className="log-confidence">
-                      {(log.confidence * 100).toFixed(0)}% confidence
+                    <div className="confidence-indicator">
+                      <div className="confidence-bar">
+                        <div 
+                          className={`confidence-fill ${getConfidenceClass(log.confidence)}`}
+                          style={{ width: `${(log.confidence * 100)}%` }}
+                        />
+                      </div>
+                      <span className="confidence-text">{(log.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <span className="sim-time">
+                      <Clock size={10} /> {log.simTime}
                     </span>
-                    <span className="log-iteration">Iter {log.iteration}</span>
+                    <span className="log-iteration">#{log.iteration}</span>
                   </div>
                   {expandedLogs[log.id] && (
                     <div className="log-content expanded">
@@ -180,7 +222,27 @@ function AgentLog({ marathonState }) {
                     {expandedLogs[log.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     <Brain size={14} />
                     <span className="log-label">Deliberation</span>
-                    <span className="log-iteration">Iter {log.iteration}</span>
+                    {log.action && (
+                      <span className={`action-badge ${getActionBadgeClass(log.action)}`}>
+                        <Zap size={10} />
+                        {formatAction(log.action)}
+                      </span>
+                    )}
+                    {log.confidence != null && (
+                      <div className="confidence-indicator">
+                        <div className="confidence-bar">
+                          <div 
+                            className={`confidence-fill ${getConfidenceClass(log.confidence)}`}
+                            style={{ width: `${(log.confidence * 100)}%` }}
+                          />
+                        </div>
+                        <span className="confidence-text">{(log.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                    )}
+                    <span className="sim-time">
+                      <Clock size={10} /> {log.simTime}
+                    </span>
+                    <span className="log-iteration">#{log.iteration}</span>
                   </div>
                   {expandedLogs[log.id] && (
                     <div className="log-content expanded deliberation-content">

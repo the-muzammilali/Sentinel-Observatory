@@ -555,30 +555,36 @@ async def run_marathon_async(config: MarathonConfig):
             
             marathon_state.current_iteration = i + 1
             
-            # Emit iteration start
-            await emit_log_message(
-                "deliberation",
-                f"Starting iteration {i + 1} of {config.max_iterations}...",
-            )
-            
             # Run iteration in thread pool
             result = await loop.run_in_executor(None, ooda.run_iteration)
             
+            # Get simulated time string for logs
+            sim_time_str = ""
+            if result.simulated_time:
+                sim_time_str = result.simulated_time.strftime("%H:%M UT")
+            
             # Stream the decision reasoning
             if result.decision:
-                # Emit thinking tokens (from decision reasoning)
                 reasoning = result.decision.reasoning or ""
-                for token in reasoning.split():
-                    await emit_log_message("thinking", token + " ")
-                    await asyncio.sleep(0.02)
                 
-                # Emit decision
+                # Emit deliberation with full reasoning content
+                await emit_log_message(
+                    "deliberation",
+                    reasoning,
+                    sim_time=sim_time_str,
+                )
+                
+                # Brief pause to let deliberation render
+                await asyncio.sleep(0.1)
+                
+                # Emit decision summary
                 await emit_log_message(
                     "decision",
                     "",
                     action=result.decision.action,
                     reasoning=reasoning,
                     confidence=result.decision.confidence,
+                    sim_time=sim_time_str,
                 )
             
             # Update context state from OODA loop

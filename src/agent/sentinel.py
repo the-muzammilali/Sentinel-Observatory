@@ -314,6 +314,7 @@ class SentinelAgent:
         
         # Send to chat session with retry logic
         response_text = None
+        thinking_text = ""  # Capture full thinking for deliberation
         last_error = None
         
         for attempt in range(self.max_retries):
@@ -325,8 +326,8 @@ class SentinelAgent:
                 response = self.chat_session.send_message(contents)
                 response_text = response.text
                 
-                # Extract and log thinking tokens for visibility
-                self._log_thinking_process(response)
+                # Extract thinking tokens and capture full text
+                thinking_text = self._extract_thinking_text(response)
                 break
             except Exception as e:
                 last_error = e
@@ -364,22 +365,25 @@ class SentinelAgent:
         })
         
         # Parse response
-        return self._parse_response(response_text, context)
+        return self._parse_response(response_text, context, thinking_text)
     
-    def _log_thinking_process(self, response) -> None:
+    def _extract_thinking_text(self, response) -> str:
         """
-        Extract and log the thinking tokens from Gemini response.
+        Extract the thinking tokens from Gemini response.
         
-        This makes the model's reasoning process visible in OODA logs,
-        which is valuable for judges to see how the agent analyzes observations.
+        This makes the model's reasoning process visible to users,
+        which is valuable for understanding how the agent analyzes observations.
         
         Args:
             response: The Gemini API response object
+            
+        Returns:
+            The full thinking text, or empty string if not available
         """
         try:
             # Check if response has candidates with thinking content
             if not hasattr(response, 'candidates') or not response.candidates:
-                return
+                return ""
             
             for candidate in response.candidates:
                 if not hasattr(candidate, 'content') or not candidate.content:
@@ -390,18 +394,19 @@ class SentinelAgent:
                     if hasattr(part, 'thought') and part.thought:
                         thinking_text = getattr(part, 'text', '')
                         if thinking_text:
+                            # Log for server visibility
                             logger.info("🧠 AGENT THINKING PROCESS:")
-                            # Log each line of thinking for visibility
                             lines = thinking_text.split('\n')
-                            for line in lines[:20]:  # Limit to first 20 lines
+                            for line in lines[:20]:  # Limit logged lines
                                 if line.strip():
                                     logger.info(f"   💭 {line.strip()}")
-                            total_lines = len(lines)
-                            if total_lines > 20:
-                                logger.info(f"   ... ({total_lines - 20} more lines)")
-                            return
+                            if len(lines) > 20:
+                                logger.info(f"   ... ({len(lines) - 20} more lines)")
+                            return thinking_text
+            return ""
         except Exception as e:
             logger.debug(f"Could not extract thinking tokens: {e}")
+            return ""
     
     def _replay_context_to_session(self, history: List[dict]) -> None:
         """
@@ -640,7 +645,8 @@ class SentinelAgent:
     def _parse_response(
         self,
         response_text: str,
-        context: ContextState
+        context: ContextState,
+        thinking_text: str = ""
     ) -> AgentDecision:
         """
         Parse and validate the Gemini response.
@@ -648,6 +654,7 @@ class SentinelAgent:
         Args:
             response_text: Raw text response from Gemini
             context: Current context for fallback candidate preservation
+            thinking_text: Full thinking tokens from the model (for deliberation display)
         
         Returns:
             Validated AgentDecision
@@ -661,6 +668,11 @@ class SentinelAgent:
             
             # Validate with Pydantic
             decision = AgentDecision.model_validate(data)
+            
+            # Enhance reasoning with full thinking content if available
+            if thinking_text:
+                # Use thinking text as the full reasoning for frontend
+                decision.reasoning = thinking_text
             
             # Validate slew action has coordinates
             if not decision.validate_slew_action():
