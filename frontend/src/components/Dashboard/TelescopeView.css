@@ -9,7 +9,8 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  /* Unified look: No border */
+  border-bottom: none;
   flex-shrink: 0;
 }
 
@@ -32,7 +33,7 @@
 
 .panel-actions .btn-icon.active {
   background: var(--accent-primary);
-  color: var(--text-primary);
+  color: #0f172a; /* Dark text for better contrast on cyan */
 }
 
 .zoom-level {
@@ -50,8 +51,127 @@
   justify-content: center;
   overflow: hidden;
   position: relative;
-  /* Deep space gradient background */
-  background: radial-gradient(ellipse at center, #0a0f1a 0%, #050810 100%);
+  /* Clean slate background with technical feel */
+  background: #020617; 
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  /* Technical grid overlay inside telescope */
+  background-image: 
+    linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+  background-size: 100px 100px;
+}
+
+/* Side controls - vertical button panels */
+.side-controls {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 20;
+  padding: var(--space-2);
+}
+
+.left-controls {
+  left: var(--space-3);
+}
+
+.right-controls {
+  right: var(--space-3);
+}
+
+.side-btn {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  color: var(--text-secondary);
+  backdrop-filter: blur(4px);
+  transition: all var(--transition-fast);
+}
+
+.side-btn:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.side-btn.active,
+.side-controls .btn-icon.active {
+  background: var(--accent-primary) !important;
+  color: #0f172a !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.zoom-level-vertical {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-1) 0;
+}
+
+.controls-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-1) 0;
+}
+
+/* Bottom info bar */
+.telescope-info-bar {
+  position: absolute;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-1) var(--space-3);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  backdrop-filter: blur(4px);
+  z-index: 15;
+}
+
+.info-label {
+  color: var(--text-muted);
+}
+
+.info-iteration {
+  font-family: var(--font-mono);
+  color: var(--accent-primary);
+}
+
+/* Corner brackets for HUD feel */
+.telescope-content::before,
+.telescope-content::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent-primary);
+  transition: all var(--transition-slow);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.telescope-content::before {
+  top: 10px;
+  left: 10px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.telescope-content::after {
+  bottom: 10px;
+  right: 10px;
+  border-left: none;
+  border-top: none;
 }
 
 /* Space background with animated stars */
@@ -89,14 +209,14 @@
 
 .stars-medium {
   background-image: 
-    radial-gradient(3px 3px at 20% 30%, rgba(180,200,255,1) 0%, transparent 100%),
-    radial-gradient(3px 3px at 60% 70%, rgba(180,200,255,0.9) 0%, transparent 100%),
-    radial-gradient(3px 3px at 80% 20%, rgba(255,220,180,1) 0%, transparent 100%),
-    radial-gradient(3px 3px at 40% 80%, rgba(180,200,255,0.9) 0%, transparent 100%),
-    radial-gradient(3px 3px at 5% 50%, rgba(180,200,255,1) 0%, transparent 100%),
-    radial-gradient(4px 4px at 92% 45%, rgba(255,200,150,1) 0%, transparent 100%),
-    radial-gradient(3px 3px at 12% 92%, rgba(180,200,255,0.9) 0%, transparent 100%),
-    radial-gradient(3px 3px at 78% 8%, rgba(180,200,255,1) 0%, transparent 100%);
+    radial-gradient(3px 3px at 20% 30%, rgba(200,240,255,1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 60% 70%, rgba(200,240,255,0.9) 0%, transparent 100%),
+    radial-gradient(3px 3px at 80% 20%, rgba(255,255,255,1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 40% 80%, rgba(200,240,255,0.9) 0%, transparent 100%),
+    radial-gradient(3px 3px at 5% 50%, rgba(200,240,255,1) 0%, transparent 100%),
+    radial-gradient(4px 4px at 92% 45%, rgba(255,255,255,1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 12% 92%, rgba(200,240,255,0.9) 0%, transparent 100%),
+    radial-gradient(3px 3px at 78% 8%, rgba(200,240,255,1) 0%, transparent 100%);
   animation: twinkle 4s ease-in-out infinite reverse;
 }
 
@@ -106,18 +226,9 @@
 }
 
 /* Vignette overlay - gradient from edges to center */
+/* Vignette overlay removed for clean technical look */
 .vignette-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 30%,
-    rgba(5, 8, 16, 0.3) 60%,
-    rgba(5, 8, 16, 0.7) 85%,
-    rgba(5, 8, 16, 0.95) 100%
-  );
-  z-index: 1;
+  display: none;
 }
 
 /* Pan cursor states */
@@ -147,6 +258,8 @@
   transition: transform var(--transition-normal);
   transform-origin: center;
   z-index: 2;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Disable transition during dragging for smooth movement */
@@ -154,24 +267,6 @@
   transition: none;
 }
 
-/* Pan mode indicator */
-.pan-mode-indicator {
-  position: absolute;
-  top: var(--space-3);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: rgba(0, 200, 150, 0.2);
-  border: 1px solid var(--accent-success);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-sm);
-  color: var(--accent-success);
-  z-index: 15;
-  animation: fadeIn 0.2s ease-out;
-}
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -185,9 +280,9 @@
   image-rendering: pixelated;
   user-select: none;
   -webkit-user-drag: none;
-  box-shadow: 
-    0 0 40px rgba(100, 140, 255, 0.1),
-    0 0 80px rgba(100, 140, 255, 0.05);
+  box-shadow: none;
+  border: none;
+  outline: none;
 }
 
 .image-badge {

@@ -266,39 +266,39 @@ function Playback() {
       <div className="playback-row playback-row-main">
         {/* Telescope Panel */}
         <div className="playback-panel telescope-panel">
-          <div className="panel-header">
-            <span className="panel-title">
-              <Eye size={16} /> Telescope View
-            </span>
-            <div className="panel-actions">
-              <div className="zoom-controls">
-                <button className="btn btn-icon" onClick={handleZoomOut} title="Zoom out">
-                  <ZoomOut size={16} />
-                </button>
-                <span className="zoom-level">{(zoom * 100).toFixed(0)}%</span>
-                <button className="btn btn-icon" onClick={handleZoomIn} title="Zoom in">
-                  <ZoomIn size={16} />
-                </button>
-              </div>
-              <button
-                className={`btn btn-icon ${panMode ? 'active' : ''}`}
+          <div
+            className={`telescope-content ${panMode ? 'pan-mode' : ''} ${isDragging ? 'is-dragging' : ''}`}
+            onMouseDown={handleMouseDown}
+          >
+            {/* Left side controls */}
+            <div className="side-controls left-controls">
+              <span className="iteration-badge-side">
+                {currentIteration}/{selectedSession.total_iterations}
+              </span>
+            </div>
+
+            {/* Right side controls */}
+            <div className="side-controls right-controls">
+              <button className="btn btn-icon side-btn" onClick={handleZoomIn} title="Zoom in">
+                <ZoomIn size={18} />
+              </button>
+              <span className="zoom-level-vertical">{(zoom * 100).toFixed(0)}%</span>
+              <button className="btn btn-icon side-btn" onClick={handleZoomOut} title="Zoom out">
+                <ZoomOut size={18} />
+              </button>
+              <div className="controls-divider"></div>
+              <button 
+                className={`btn btn-icon side-btn ${panMode ? 'active' : ''}`}
                 onClick={togglePanMode}
                 title={panMode ? 'Exit pan mode' : 'Enter pan mode'}
               >
-                <Move size={16} />
+                <Move size={18} />
               </button>
-              <button className="btn btn-icon" onClick={handleResetView} title="Reset view">
-                <RefreshCw size={16} />
+              <button className="btn btn-icon side-btn" onClick={handleResetView} title="Reset view">
+                <RefreshCw size={18} />
               </button>
             </div>
-            <span className="iteration-badge">
-              Iteration {currentIteration} / {selectedSession.total_iterations}
-            </span>
-          </div>
-          <div
-            className={`panel-content telescope-content ${panMode ? 'pan-mode' : ''} ${isDragging ? 'is-dragging' : ''}`}
-            onMouseDown={handleMouseDown}
-          >
+
             {currentImageUrl ? (
               <div
                 className="image-container"
@@ -317,6 +317,12 @@ function Playback() {
             ) : (
               <div className="no-image">No image available</div>
             )}
+
+            {/* Bottom info bar */}
+            <div className="telescope-info-bar">
+              <Eye size={14} />
+              <span className="info-label">Playback View</span>
+            </div>
           </div>
         </div>
 

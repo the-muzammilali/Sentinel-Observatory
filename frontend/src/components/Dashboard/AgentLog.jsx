@@ -128,20 +128,22 @@ function AgentLog({ marathonState }) {
           <Brain size={16} />
           <span>Agent Reasoning</span>
         </div>
-        <label className="auto-scroll-toggle">
-          <input
-            type="checkbox"
-            checked={autoScroll}
-            onChange={(e) => setAutoScroll(e.target.checked)}
-          />
+        <div className="auto-scroll-toggle">
           <span>Auto-scroll</span>
-        </label>
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={autoScroll}
+              onChange={(e) => setAutoScroll(e.target.checked)}
+            />
+            <span className="slider round"></span>
+          </label>
+        </div>
       </div>
 
       <div className="log-container" ref={logContainerRef}>
         {logs.length === 0 ? (
           <div className="log-placeholder">
-            <Brain size={32} />
             <p>Waiting for agent activity...</p>
           </div>
         ) : (

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, XCircle, Target, Percent } from 'lucide-react'
+import { CheckCircle2, XCircle, Target } from 'lucide-react'
+import Sparkline from '../Visualization/Sparkline'
 import './GroundTruth.css'
 
 function GroundTruth({ marathonState }) {
@@ -14,6 +15,13 @@ function GroundTruth({ marathonState }) {
     detected_transients: 0,
   })
 
+  // Simulated history for sparklines
+  const [history, setHistory] = useState({
+    f1: [0.7, 0.72, 0.75, 0.74, 0.78, 0.82, 0.85, 0.88],
+    precision: [0.65, 0.68, 0.7, 0.72, 0.75, 0.79, 0.82, 0.85],
+    recall: [0.6, 0.65, 0.68, 0.7, 0.72, 0.75, 0.78, 0.8]
+  })
+
   useEffect(() => {
     if (!marathonState.isRunning && marathonState.status !== 'completed') return
 
@@ -23,6 +31,13 @@ function GroundTruth({ marathonState }) {
         if (response.ok) {
           const data = await response.json()
           setMetrics(data)
+          
+          // Update history directly here to avoid cascading effect warning
+          setHistory(prev => ({
+            f1: [...prev.f1.slice(1), data.f1_score || 0],
+            precision: [...prev.precision.slice(1), data.precision || 0],
+            recall: [...prev.recall.slice(1), data.recall || 0]
+          }))
         }
       } catch (error) {
         console.error('Failed to fetch ground truth:', error)
@@ -46,78 +61,70 @@ function GroundTruth({ marathonState }) {
       <div className="panel-header">
         <div className="panel-title">
           <Target size={16} />
-          <span>Ground Truth</span>
+          <span>Telemetry</span>
         </div>
       </div>
 
-      <div className="metrics-container">
-        {/* Main metrics */}
-        <div className="main-metrics">
-          <div className={`metric-card ${getScoreClass(metrics.f1_score)}`}>
-            <div className="metric-value">{(metrics.f1_score * 100).toFixed(0)}%</div>
-            <div className="metric-label">F1 Score</div>
+      <div className="telemetry-list">
+        {/* F1 Score Row */}
+        <div className="telemetry-row">
+          <div className="telemetry-info">
+            <span className="telemetry-label">F1 Score</span>
+            <span className={`telemetry-value ${getScoreClass(metrics.f1_score)}`}>
+              {(metrics.f1_score * 100).toFixed(0)}%
+            </span>
+          </div>
+          <div className="telemetry-chart">
+            <Sparkline data={history.f1} color="var(--accent-primary)" />
           </div>
         </div>
 
-        <div className="secondary-metrics">
-          <div className="metric-row">
-            <span className="metric-name">Precision</span>
-            <div className="metric-bar">
-              <div
-                className="metric-fill precision"
-                style={{ width: `${metrics.precision * 100}%` }}
-              />
+        {/* Precision Row */}
+        <div className="telemetry-row">
+          <div className="telemetry-info">
+            <span className="telemetry-label">Precision</span>
+            <span className="telemetry-value">
+              {(metrics.precision * 100).toFixed(0)}%
+            </span>
+          </div>
+          <div className="telemetry-chart">
+            <Sparkline data={history.precision} color="var(--accent-info)" />
+          </div>
+        </div>
+
+        {/* Recall Row */}
+        <div className="telemetry-row">
+          <div className="telemetry-info">
+            <span className="telemetry-label">Recall</span>
+            <span className="telemetry-value">
+              {(metrics.recall * 100).toFixed(0)}%
+            </span>
+          </div>
+          <div className="telemetry-chart">
+            <Sparkline data={history.recall} color="var(--accent-warning)" />
+          </div>
+        </div>
+
+        {/* Transient Progress (Mini Bar) */}
+        <div className="telemetry-row">
+             <div className="telemetry-info">
+            <span className="telemetry-label">Detection</span>
+            <span className="telemetry-value text-muted">
+               {metrics.detected_transients}/{metrics.total_transients}
+            </span>
+          </div>
+          <div className="telemetry-bar-container">
+            <div className="telemetry-bar-bg">
+                <div 
+                    className="telemetry-bar-fill"
+                    style={{ 
+                        width: metrics.total_transients > 0 
+                            ? `${(metrics.detected_transients / metrics.total_transients) * 100}%` 
+                            : '0%' 
+                    }}
+                />
             </div>
-            <span className="metric-percent">{(metrics.precision * 100).toFixed(0)}%</span>
           </div>
-
-          <div className="metric-row">
-            <span className="metric-name">Recall</span>
-            <div className="metric-bar">
-              <div
-                className="metric-fill recall"
-                style={{ width: `${metrics.recall * 100}%` }}
-              />
-            </div>
-            <span className="metric-percent">{(metrics.recall * 100).toFixed(0)}%</span>
-          </div>
-        </div>
-
-        {/* Confusion matrix summary */}
-        <div className="confusion-summary">
-          <div className="confusion-item positive">
-            <CheckCircle2 size={14} />
-            <span>TP: {metrics.true_positives}</span>
-          </div>
-          <div className="confusion-item fp">
-            <XCircle size={14} />
-            <span>FP: {metrics.false_positives}</span>
-          </div>
-          <div className="confusion-item fn">
-            <XCircle size={14} />
-            <span>FN: {metrics.false_negatives}</span>
-          </div>
-        </div>
-
-        {/* Detection progress */}
-        <div className="detection-progress">
-          <div className="progress-label">
-            <Target size={12} />
-            <span>Detection Progress</span>
-          </div>
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{
-                width: metrics.total_transients > 0
-                  ? `${(metrics.detected_transients / metrics.total_transients) * 100}%`
-                  : '0%'
-              }}
-            />
-          </div>
-          <span className="progress-text">
-            {metrics.detected_transients} / {metrics.total_transients} transients
-          </span>
         </div>
       </div>
     </div>

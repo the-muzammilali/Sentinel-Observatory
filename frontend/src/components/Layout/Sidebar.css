@@ -38,7 +38,7 @@
 
 .nav-item.active {
   background: var(--accent-primary);
-  color: var(--text-primary);
+  color: #0f172a; /* Dark text for better contrast on cyan */
 }
 
 /* Sections */
@@ -119,7 +119,8 @@
   flex-direction: column;
   align-items: center;
   padding: var(--space-3);
-  background: var(--bg-tertiary);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 

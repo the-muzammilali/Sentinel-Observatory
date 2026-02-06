@@ -13,13 +13,22 @@
   color: var(--text-muted);
 }
 
+/* Panel header with border */
+.candidate-list .panel-header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-3) var(--space-4);
+}
+
 .candidates-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  min-height: 0;
+  max-height: 100%;
 }
 
 .candidates-placeholder {
@@ -33,21 +42,25 @@
 }
 
 .candidate-item {
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid rgba(148, 163, 184, 0.1);
   transition: all var(--transition-fast);
+  overflow: hidden;
 }
 
 .candidate-item:hover {
-  background: var(--bg-elevated);
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(148, 163, 184, 0.2);
+  transform: translateY(-1px);
 }
 
 .candidate-item.selected {
   border-color: var(--accent-primary);
-  background: var(--bg-elevated);
+  background: rgba(6, 182, 212, 0.1);
+  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.3);
 }
 
 .candidate-item.confirmed {
@@ -67,14 +80,23 @@
 }
 
 .candidate-main {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+  min-width: 0;
 }
 
 .candidate-id-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-1);
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.candidate-id-row .badge {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .status-icon.confirmed { color: var(--status-confirmed); }
@@ -82,9 +104,15 @@
 .status-icon.new { color: var(--status-new); }
 
 .candidate-id {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   font-family: var(--font-mono);
-  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  letter-spacing: 0.02em;
 }
 
 .candidate-details {
@@ -92,14 +120,32 @@
   gap: var(--space-3);
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.candidate-details > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .candidate-coords {
   font-family: var(--font-mono);
+  color: #94a3b8;
+  font-size: var(--font-size-xs);
+  background: rgba(51, 65, 85, 0.5);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
 }
 
 .candidate-hypothesis {
-  color: var(--text-secondary);
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-xs);
 }
 
 .candidate-stats {
@@ -111,13 +157,14 @@
 .stat-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .stat-label {
   font-size: var(--font-size-xs);
-  color: var(--text-muted);
+  color: #94a3b8;
   min-width: 70px;
+  font-weight: var(--font-weight-medium);
 }
 
 .confidence-bar {
@@ -137,13 +184,15 @@
 .confidence-value {
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
-  color: var(--text-secondary);
-  min-width: 35px;
+  color: #e2e8f0;
+  font-weight: var(--font-weight-semibold);
+  min-width: 40px;
   text-align: right;
 }
 
 .observations-count {
   font-size: var(--font-size-xs);
-  color: var(--text-muted);
+  color: #64748b;
   text-align: right;
+  margin-top: var(--space-1);
 }

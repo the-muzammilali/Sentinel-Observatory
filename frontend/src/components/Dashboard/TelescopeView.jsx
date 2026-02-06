@@ -129,41 +129,6 @@ function TelescopeView({ marathonState, currentIteration }) {
 
   return (
     <div className="telescope-view">
-      <div className="panel-header">
-        <div className="panel-title">
-          <Camera size={16} />
-          <span>Telescope View</span>
-        </div>
-        <div className="panel-actions">
-          <button
-            className={`btn btn-icon ${showDiff ? 'active' : ''}`}
-            onClick={() => setShowDiff(!showDiff)}
-            title="Toggle difference image"
-          >
-            <Layers size={16} />
-          </button>
-          <div className="zoom-controls">
-            <button className="btn btn-icon" onClick={handleZoomOut} title="Zoom out">
-              <ZoomOut size={16} />
-            </button>
-            <span className="zoom-level">{(zoom * 100).toFixed(0)}%</span>
-            <button className="btn btn-icon" onClick={handleZoomIn} title="Zoom in">
-              <ZoomIn size={16} />
-            </button>
-          </div>
-          <button 
-            className={`btn btn-icon ${panMode ? 'active' : ''}`}
-            onClick={togglePanMode}
-            title={panMode ? 'Exit pan mode' : 'Enter pan mode'}
-          >
-            <Move size={16} />
-          </button>
-          <button className="btn btn-icon" onClick={handleReset} title="Reset view">
-            <RefreshCw size={16} />
-          </button>
-        </div>
-      </div>
-
       <div 
         className={`telescope-content ${panMode ? 'pan-mode' : ''} ${isDragging ? 'is-dragging' : ''}`}
         onMouseDown={handleMouseDown}
@@ -173,9 +138,39 @@ function TelescopeView({ marathonState, currentIteration }) {
           <div className="stars stars-small"></div>
           <div className="stars stars-medium"></div>
         </div>
-        
-        {/* Vignette overlay */}
-        <div className="vignette-overlay"></div>
+
+        {/* Left side controls */}
+        <div className="side-controls left-controls">
+          <button
+            className={`btn btn-icon side-btn ${showDiff ? 'active' : ''}`}
+            onClick={() => setShowDiff(!showDiff)}
+            title="Toggle difference image"
+          >
+            <Layers size={18} />
+          </button>
+        </div>
+
+        {/* Right side controls */}
+        <div className="side-controls right-controls">
+          <button className="btn btn-icon side-btn" onClick={handleZoomIn} title="Zoom in">
+            <ZoomIn size={18} />
+          </button>
+          <span className="zoom-level-vertical">{(zoom * 100).toFixed(0)}%</span>
+          <button className="btn btn-icon side-btn" onClick={handleZoomOut} title="Zoom out">
+            <ZoomOut size={18} />
+          </button>
+          <div className="controls-divider"></div>
+          <button 
+            className={`btn btn-icon side-btn ${panMode ? 'active' : ''}`}
+            onClick={togglePanMode}
+            title={panMode ? 'Exit pan mode' : 'Enter pan mode'}
+          >
+            <Move size={18} />
+          </button>
+          <button className="btn btn-icon side-btn" onClick={handleReset} title="Reset view">
+            <RefreshCw size={18} />
+          </button>
+        </div>
         
         {loading && (
           <div className="loading-overlay">
@@ -212,25 +207,18 @@ function TelescopeView({ marathonState, currentIteration }) {
             </span>
           </div>
         )}
-        
-        {/* Pan mode indicator */}
-        {panMode && (
-          <div className="pan-mode-indicator">
-            <Move size={14} />
-            <span>Pan Mode - Drag to move</span>
-          </div>
-        )}
-      </div>
 
-      <div className="telescope-footer">
-        <span className="footer-info">
-          {showDiff ? 'Difference Image (Reference - Current)' : 'Current Observation'}
-        </span>
-        {currentIteration && (
-          <span className="footer-iteration">
-            Iteration {currentIteration}
+        {/* Bottom info bar */}
+        <div className="telescope-info-bar">
+          <span className="info-label">
+            {showDiff ? 'Difference Image' : 'Current Observation'}
           </span>
-        )}
+          {currentIteration && (
+            <span className="info-iteration">
+              Iteration {currentIteration}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

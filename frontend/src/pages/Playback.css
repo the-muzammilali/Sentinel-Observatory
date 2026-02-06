@@ -134,8 +134,9 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-tertiary);
+  /* Unified look */
+  border-bottom: none;
+  background: transparent;
 }
 
 .panel-title {
@@ -166,16 +167,23 @@
 
 /* Telescope Panel */
 .telescope-panel {
-  flex: 1.5;
+  flex: 1;
   min-width: 0;
 }
 
-.telescope-content {
+.playback-dashboard .telescope-content {
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-tertiary);
+  background: #020617;
   overflow: hidden;
   position: relative;
+  border-radius: var(--radius-lg);
+  background-image: 
+    linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+  background-size: 100px 100px;
 }
 
 .telescope-content.pan-mode {
@@ -184,6 +192,94 @@
 
 .telescope-content.is-dragging {
   cursor: grabbing;
+}
+
+/* Side controls for playback */
+.playback-dashboard .side-controls {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 20;
+  padding: var(--space-2);
+}
+
+.playback-dashboard .left-controls {
+  left: var(--space-3);
+}
+
+.playback-dashboard .right-controls {
+  right: var(--space-3);
+}
+
+.playback-dashboard .side-btn {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  color: var(--text-secondary);
+  backdrop-filter: blur(4px);
+  transition: all var(--transition-fast);
+}
+
+.playback-dashboard .side-btn:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.playback-dashboard .side-btn.active,
+.playback-dashboard .side-controls .btn-icon.active {
+  background: var(--accent-primary) !important;
+  color: #0f172a !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.iteration-badge-side {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--accent-primary);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+
+.playback-dashboard .zoom-level-vertical {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-1) 0;
+}
+
+.playback-dashboard .controls-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-1) 0;
+}
+
+/* Bottom info bar for playback */
+.playback-dashboard .telescope-info-bar {
+  position: absolute;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  backdrop-filter: blur(4px);
+  z-index: 15;
+  color: var(--text-muted);
 }
 
 .image-container {

@@ -68,7 +68,8 @@
   gap: var(--space-3);
   margin-bottom: var(--space-6);
   padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  /* Unified look: No border */
+  border-bottom: none;
 }
 
 .card-icon {

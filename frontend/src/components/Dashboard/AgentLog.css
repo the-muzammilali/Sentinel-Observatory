@@ -1,118 +1,138 @@
+/* Terminal / Agent Log Style */
 .agent-log {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 0; /* Critical for flex child scrolling */
+  min-height: 0;
   overflow: hidden;
+  background: #0f172a; /* Match main background */
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-subtle);
+  font-family: var(--font-mono); /* Force monospace for entire panel */
 }
 
+/* Header style for terminal */
+/* Header style for terminal - Unified */
+.agent-log .panel-header {
+  background: transparent;
+  border-bottom: none;
+  padding: var(--space-2) var(--space-4);
+}
+
+/* Auto-scroll toggle */
 .auto-scroll-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--font-size-xs);
   color: var(--text-muted);
-  cursor: pointer;
 }
 
-.auto-scroll-toggle input {
-  accent-color: var(--accent-primary);
+.auto-scroll-toggle .switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.auto-scroll-toggle .switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.auto-scroll-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  transition: .3s;
+  border: 1px solid var(--border-default);
+}
+
+.auto-scroll-toggle .slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-muted);
+  transition: .3s;
+  border-radius: 50%;
+}
+
+.auto-scroll-toggle input:checked + .slider {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.auto-scroll-toggle input:checked + .slider:before {
+  transform: translateX(16px);
+  background-color: white;
+}
+
+.auto-scroll-toggle .slider.round {
+  border-radius: 20px;
 }
 
 .log-container {
-  flex: 1 1 0; /* Explicitly set to allow shrinking */
+  flex: 1 1 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  min-height: 0; /* Critical for flex scroll */
-  max-height: 100%; /* Prevent overflow */
+  gap: var(--space-1); /* Tighter gap for terminal feel */
+  min-height: 0;
 }
 
 .log-placeholder {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
   color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
 }
 
+.log-placeholder p {
+  margin: 0;
+}
+
+/* Log lines - streamlined */
 .log-entry {
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  flex-shrink: 0; /* Prevent entries from shrinking */
+  background: transparent; /* No card background for individual lines */
+  border-radius: 0;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.3); /* Very subtle divider */
+  flex-shrink: 0;
+  padding: var(--space-1) 0;
 }
 
 .log-header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
-}
-
-.log-header.clickable {
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.log-header.clickable:hover {
-  background: var(--bg-elevated);
-}
-
-.log-action {
-  font-weight: var(--font-weight-semibold);
-  font-family: var(--font-mono);
-}
-
-.log-confidence {
-  color: var(--text-muted);
-  margin-left: auto;
-}
-
-.log-iteration {
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
   padding: var(--space-1) var(--space-2);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs); /* Smaller font for terminal */
+  color: var(--text-secondary);
 }
 
-.log-label {
-  color: var(--text-secondary);
+.log-action, .log-label {
+  font-weight: bold;
 }
 
 .log-content {
-  padding: var(--space-3);
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.log-content.expanded {
-  animation: slideDown var(--transition-fast) ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 500px;
-  }
-}
-
-.log-content p {
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
-  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-4);
+  background: rgba(15, 23, 42, 0.3);
+  border-left: 2px solid var(--border-subtle);
+  margin-left: var(--space-2);
+  color: var(--text-muted);
 }
 
 .deliberation-content pre {
@@ -120,8 +140,8 @@
   font-size: var(--font-size-xs);
   white-space: pre-wrap;
   word-wrap: break-word;
-  color: var(--text-secondary);
-  line-height: var(--line-height-relaxed);
+  color: #94a3b8;
+  line-height: 1.4;
 }
 
 /* Thinking (streaming) */

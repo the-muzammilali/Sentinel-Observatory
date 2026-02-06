@@ -7,33 +7,33 @@
    CSS VARIABLES (Design Tokens)
    ======================================== */
 :root {
-  /* Background hierarchy */
-  --bg-primary: #0a0e17;
-  --bg-secondary: #141b2d;
-  --bg-tertiary: #1d2640;
-  --bg-elevated: #252d44;
+  /* Background hierarchy - Slate Theme */
+  --bg-primary: #0f172a;   /* slate-900 - matches cards */
+  --bg-secondary: #0f172a; /* slate-900 */
+  --bg-tertiary: #1e293b;  /* slate-800 */
+  --bg-elevated: #334155;  /* slate-700 */
 
-  /* Accent colors */
-  --accent-primary: #6366f1;
-  --accent-primary-hover: #818cf8;
-  --accent-secondary: #8b5cf6;
-  --accent-success: #10b981;
-  --accent-warning: #f59e0b;
-  --accent-danger: #ef4444;
-  --accent-info: #3b82f6;
+  /* Accent colors - Cyan & Emerald */
+  --accent-primary: #06b6d4;       /* cyan-500 */
+  --accent-primary-hover: #0891b2; /* cyan-600 */
+  --accent-secondary: #22d3ee;     /* cyan-400 */
+  --accent-success: #10b981;       /* emerald-500 */
+  --accent-warning: #f59e0b;       /* amber-500 */
+  --accent-danger: #ef4444;        /* red-500 */
+  --accent-info: #0ea5e9;          /* sky-500 */
 
   /* Text colors */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-inverse: #0f172a;
+  --text-primary: #e2e8f0;   /* slate-200 */
+  --text-secondary: #94a3b8; /* slate-400 */
+  --text-muted: #64748b;     /* slate-500 */
+  --text-inverse: #020617;   /* slate-950 */
 
-  /* Status colors (matching Candidate.status) */
-  --status-new: #3b82f6;
-  --status-monitoring: #f59e0b;
-  --status-confirmed: #10b981;
-  --status-rejected: #64748b;
-
+  /* Status colors */
+  --status-new: #0ea5e9;       /* sky-500 */
+  --status-monitoring: #f59e0b; /* amber-500 */
+  --status-confirmed: #10b981;  /* emerald-500 */
+  --status-rejected: #64748b;   /* slate-500 */
+  
   /* Weather observability */
   --weather-excellent: #10b981;
   --weather-good: #22c55e;
@@ -41,9 +41,9 @@
   --weather-unusable: #ef4444;
 
   /* Borders and dividers */
-  --border-subtle: rgba(148, 163, 184, 0.1);
-  --border-default: rgba(148, 163, 184, 0.2);
-  --border-strong: rgba(148, 163, 184, 0.3);
+  --border-subtle: #232a3a;    /* from reference image */
+  --border-default: #2d3548;   /* slightly lighter */
+  --border-strong: #3a4255;    /* more visible */
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
@@ -134,6 +134,21 @@ body {
   color: var(--text-primary);
   background-color: var(--bg-primary);
   min-height: 100vh;
+  position: relative;
+}
+
+/* Subtle grain texture overlay */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 #root {
@@ -202,14 +217,15 @@ pre {
 /* Cards / Panels */
 .card {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
+  border: 2px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  transition: box-shadow var(--transition-normal);
+  padding: var(--space-4); /* Reduced from p-6 */
+  /* Minimal shadow, rely on borders */
+  box-shadow: none; 
 }
 
 .card:hover {
-  box-shadow: var(--shadow-md);
+  border-color: var(--border-default);
 }
 
 .card-header {
@@ -218,7 +234,8 @@ pre {
   gap: var(--space-2);
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
+  /* Unified look: No border */
+  border-bottom: none;
 }
 
 .card-title {
@@ -246,11 +263,15 @@ pre {
 
 .btn-primary {
   background: var(--accent-primary);
-  color: var(--text-primary);
+  color: #0f172a; /* Dark text for better contrast on cyan */
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .btn-primary:hover {
   background: var(--accent-primary-hover);
+  color: #0f172a;
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -507,8 +528,8 @@ pre {
   pointer-events: none;
   z-index: -1;
   background:
-    radial-gradient(ellipse at bottom, #1a237e 0%, transparent 50%),
-    radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+    radial-gradient(ellipse at bottom, rgba(8, 145, 178, 0.1) 0%, transparent 40%),
+    radial-gradient(2px 2px at 20px 30px, #e2e8f0, transparent),
     radial-gradient(
       2px 2px at 40px 70px,
       rgba(255, 255, 255, 0.5),

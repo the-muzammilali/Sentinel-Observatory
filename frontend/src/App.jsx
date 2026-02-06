@@ -186,7 +186,6 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app">
-        <div className="starfield" />
         <Header
           marathonState={marathonState}
           wsConnected={wsConnected}
