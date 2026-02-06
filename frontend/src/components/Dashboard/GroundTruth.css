@@ -2,42 +2,43 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 /* Panel header with border */
 .ground-truth .panel-header {
   border-bottom: 1px solid var(--border-subtle);
   padding: var(--space-3) var(--space-4);
-}
-
-.metrics-container {
-  flex: 1;
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+  flex-shrink: 0;
 }
 
 .telemetry-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
   flex: 1;
-  justify-content: center;
+  padding: var(--space-3);
+  gap: var(--space-2);
+  overflow: hidden;
 }
 
 .telemetry-row {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  flex: 1;
+  min-height: 0;
 }
 
 .telemetry-info {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--font-size-xs);
+  flex-direction: column;
+  gap: 2px;
+  min-width: 70px;
+  flex-shrink: 0;
 }
 
 .telemetry-label {
@@ -45,12 +46,14 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: var(--font-weight-medium);
+  font-size: 10px;
 }
 
 .telemetry-value {
   font-family: var(--font-mono);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
+  font-size: var(--font-size-sm);
 }
 
 .telemetry-value.excellent { color: var(--accent-success); }
@@ -59,31 +62,33 @@
 .telemetry-value.poor { color: var(--accent-danger); }
 
 .telemetry-chart {
-  height: 30px;
-  background: rgba(15, 23, 42, 0.3);
-  border-radius: var(--radius-sm);
-  overflow: visible;
+  flex: 1;
+  height: 100%;
+  max-height: 32px;
+  min-height: 20px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  overflow: hidden;
 }
 
-/* Detection bar */
+/* Detection bar row */
 .telemetry-bar-container {
-  height: 6px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-full);
-  margin-top: var(--space-1);
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .telemetry-bar-bg {
   width: 100%;
-  height: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
   border-radius: var(--radius-full);
+  overflow: hidden;
 }
 
 .telemetry-bar-fill {
   height: 100%;
-  background: var(--accent-primary);
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
   border-radius: var(--radius-full);
   transition: width var(--transition-normal);
 }

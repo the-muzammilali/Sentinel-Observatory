@@ -69,7 +69,7 @@ function GroundTruth({ marathonState }) {
         {/* F1 Score Row */}
         <div className="telemetry-row">
           <div className="telemetry-info">
-            <span className="telemetry-label">F1 Score</span>
+            <span className="telemetry-label">Accuracy</span>
             <span className={`telemetry-value ${getScoreClass(metrics.f1_score)}`}>
               {(metrics.f1_score * 100).toFixed(0)}%
             </span>
@@ -79,35 +79,9 @@ function GroundTruth({ marathonState }) {
           </div>
         </div>
 
-        {/* Precision Row */}
-        <div className="telemetry-row">
-          <div className="telemetry-info">
-            <span className="telemetry-label">Precision</span>
-            <span className="telemetry-value">
-              {(metrics.precision * 100).toFixed(0)}%
-            </span>
-          </div>
-          <div className="telemetry-chart">
-            <Sparkline data={history.precision} color="var(--accent-info)" />
-          </div>
-        </div>
-
-        {/* Recall Row */}
-        <div className="telemetry-row">
-          <div className="telemetry-info">
-            <span className="telemetry-label">Recall</span>
-            <span className="telemetry-value">
-              {(metrics.recall * 100).toFixed(0)}%
-            </span>
-          </div>
-          <div className="telemetry-chart">
-            <Sparkline data={history.recall} color="var(--accent-warning)" />
-          </div>
-        </div>
-
         {/* Transient Progress (Mini Bar) */}
         <div className="telemetry-row">
-             <div className="telemetry-info">
+          <div className="telemetry-info">
             <span className="telemetry-label">Detection</span>
             <span className="telemetry-value text-muted">
                {metrics.detected_transients}/{metrics.total_transients}
