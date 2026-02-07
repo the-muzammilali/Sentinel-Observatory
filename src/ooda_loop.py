@@ -241,7 +241,6 @@ class OODALoop:
             
             # 5. Initialize Agent
             logger.info("5. Initializing SentinelAgent...")
-            # TODO: Update Agent to accept confirm_threshold if supported, or handle in decision logic
             self._agent = SentinelAgent(
                 confirm_threshold=self.config.confirm_threshold,
                 temperature=0.2
