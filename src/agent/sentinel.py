@@ -85,7 +85,9 @@ class SentinelAgent:
             model_name: Gemini model name. Defaults to gemini-3.0-flash.
             temperature: Sampling temperature (0.0-1.0). Lower = more consistent.
             max_retries: Maximum API retry attempts.
+            max_retries: Maximum API retry attempts.
             retry_delay: Base delay between retries in seconds.
+            confirm_threshold: Confidence threshold (0.0-1.0) for candidate confirmation.
         """
         # Load environment variables
         load_dotenv()
@@ -109,6 +111,8 @@ class SentinelAgent:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.confirm_threshold = confirm_threshold
+        if not 0.0 <= self.confirm_threshold <= 1.0:
+            raise ValueError("confirm_threshold must be between 0.0 and 1.0")
         
         # Persistent chat session for long-context reasoning
         self.chat_session = None

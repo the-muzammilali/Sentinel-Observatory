@@ -85,7 +85,6 @@ class LoopConfig:
     
     # False positive injection (Improvement #1)
     inject_false_positives: bool = True
-    inject_false_positives: bool = True
     num_false_positives: int = 3  # Updated by API based on rate
     
     # Data paths
