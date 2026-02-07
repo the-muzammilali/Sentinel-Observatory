@@ -117,6 +117,7 @@
 
 .playback-row-bottom {
   flex: 0 0 180px;
+  min-height: 0;
 }
 
 /* Panels */
