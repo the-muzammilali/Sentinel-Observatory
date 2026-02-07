@@ -73,7 +73,7 @@ Move telescope to specific coordinates. Use when:
 Confirm a transient detection and raise an alert. Use when:
 - Candidate has been observed 3+ times with brightening pattern (BRIGHTENING status)
 - Shows clear brightening pattern (magnitude decreasing over time)
-- High confidence (>0.8)
+- High confidence (>{confirm_threshold})
 
 ### `wait`
 Skip this observation cycle. Use when:
@@ -377,18 +377,19 @@ Input: Cloud extinction at 0.75, images are very noisy
 """
 
 
-def build_full_prompt(context: ContextState, include_examples: bool = True) -> str:
+def build_full_prompt(context: ContextState, confirm_threshold: float = 0.8, include_examples: bool = True) -> str:
     """Build the complete prompt for Gemini.
     
     Args:
         context: Current agent state
+        confirm_threshold: Confidence threshold for alerts
         include_examples: Whether to include few-shot examples (adds tokens but improves quality)
     
     Returns:
         Complete prompt string
     """
     parts = [
-        SYSTEM_INSTRUCTION,
+        SYSTEM_INSTRUCTION.format(confirm_threshold=confirm_threshold),
         build_context_prompt(context)
     ]
     

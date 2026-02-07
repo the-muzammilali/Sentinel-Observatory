@@ -34,7 +34,7 @@ from .models import (
     WeatherContext,
     create_default_wait_decision
 )
-from .prompts import build_full_prompt, SYSTEM_INSTRUCTION, OBSERVATION_SESSION_INSTRUCTION
+from .prompts import SYSTEM_INSTRUCTION, OBSERVATION_SESSION_INSTRUCTION
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class SentinelAgent:
             model_name: Gemini model name. Defaults to gemini-3.0-flash.
             temperature: Sampling temperature (0.0-1.0). Lower = more consistent.
             max_retries: Maximum API retry attempts.
-            max_retries: Maximum API retry attempts.
+
             retry_delay: Base delay between retries in seconds.
             confirm_threshold: Confidence threshold (0.0-1.0) for candidate confirmation.
         """
