@@ -128,19 +128,22 @@ function AgentLog({ marathonState }) {
     const fetchLogHistory = async () => {
       // Only fetch once per component lifecycle
       if (!marathonState.isRunning || historyFetchedRef.current) return
-      historyFetchedRef.current = true
       
       try {
         const response = await fetch('http://localhost:8000/api/marathon/logs')
         if (response.ok) {
+          historyFetchedRef.current = true
           const data = await response.json()
           if (data.logs && data.logs.length > 0) {
             // Process each historical log through handleLogMessage
             data.logs.forEach(log => handleLogMessage(log))
           }
+        } else {
+          // Allow retry on non-ok responses
         }
       } catch (error) {
         console.warn('Failed to fetch log history:', error)
+        // Allow retry on network errors
       }
     }
     
