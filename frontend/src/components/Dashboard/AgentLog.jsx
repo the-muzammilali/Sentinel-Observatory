@@ -8,6 +8,7 @@ function AgentLog({ marathonState }) {
   const [autoScroll, setAutoScroll] = useState(true)
   const logContainerRef = useRef(null)
   const logIdRef = useRef(0)
+  const historyFetchedRef = useRef(false)
 
   // Generate unique ID for each log
   const getNextLogId = useCallback(() => {
@@ -125,8 +126,9 @@ function AgentLog({ marathonState }) {
   // Fetch log history on mount if marathon is running (for page refresh recovery)
   useEffect(() => {
     const fetchLogHistory = async () => {
-      // Only fetch if marathon is running and we have no logs (e.g., page refresh)
-      if (!marathonState.isRunning || logs.length > 0) return
+      // Only fetch once per component lifecycle
+      if (!marathonState.isRunning || historyFetchedRef.current) return
+      historyFetchedRef.current = true
       
       try {
         const response = await fetch('http://localhost:8000/api/marathon/logs')
@@ -143,7 +145,7 @@ function AgentLog({ marathonState }) {
     }
     
     fetchLogHistory()
-  // Only run on mount - logs.length check inside prevents re-fetching
+  // Only run when marathon state changes - ref prevents duplicate fetches
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marathonState.isRunning])
 

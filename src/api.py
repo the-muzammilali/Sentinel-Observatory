@@ -561,7 +561,7 @@ async def run_marathon_async(config: MarathonConfig):
         
         # Create OODA loop config
         # Generate truly random seed if not provided (using system entropy)
-        if config.random_seed:
+        if config.random_seed is not None:
             effective_seed = config.random_seed
         else:
             import os
