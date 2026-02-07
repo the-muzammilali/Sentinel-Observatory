@@ -68,6 +68,8 @@ class MarathonConfig(BaseModel):
     inject_false_positives: bool = True
     false_positive_rate: float = 0.3
     step_interval_hours: float = 0.5
+    confirm_threshold: float = 0.8
+    weather_enabled: bool = True
     random_seed: Optional[int] = None  # None = random each run
 
 class StatusResponse(BaseModel):
@@ -575,7 +577,10 @@ async def run_marathon_async(config: MarathonConfig):
             num_stars=config.num_stars,
             num_transients=config.num_transients,
             inject_false_positives=config.inject_false_positives,
+            num_false_positives=int(config.false_positive_rate * 10),  # Scale 0.0-1.0 to 0-10 artifacts
             step_interval_hours=config.step_interval_hours,
+            confirm_threshold=config.confirm_threshold,
+            weather_enabled=config.weather_enabled,
             random_seed=effective_seed,
         )
         logger.info(f"Using random seed: {effective_seed}")

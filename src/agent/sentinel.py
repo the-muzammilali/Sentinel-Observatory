@@ -73,7 +73,8 @@ class SentinelAgent:
         model_name: Optional[str] = None,
         temperature: float = 0.2,
         max_retries: int = 3,
-        retry_delay: float = 2.0
+        retry_delay: float = 2.0,
+        confirm_threshold: float = 0.8
     ):
         """
         Initialize the Sentinel Agent.
@@ -107,6 +108,7 @@ class SentinelAgent:
         self.temperature = temperature
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.confirm_threshold = confirm_threshold
         
         # Persistent chat session for long-context reasoning
         self.chat_session = None
@@ -254,7 +256,8 @@ class SentinelAgent:
         # Format the system instruction with initial context
         system_prompt = OBSERVATION_SESSION_INSTRUCTION.format(
             simulated_time=initial_context.simulated_time,
-            num_candidates=len(initial_context.candidates)
+            num_candidates=len(initial_context.candidates),
+            confirm_threshold=self.confirm_threshold
         )
         
         try:

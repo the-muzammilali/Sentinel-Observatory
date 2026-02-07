@@ -170,7 +170,7 @@ Move telescope to specific coordinates. Use when:
 Confirm a transient and raise alert. Use when:
 - Candidate observed 3+ times with brightening (BRIGHTENING status)
 - Shows clear brightening pattern over time
-- High confidence (>0.8) based on accumulated evidence
+- High confidence (>{confirm_threshold}) based on accumulated evidence
 
 ### `wait`
 Skip this observation. Use when:

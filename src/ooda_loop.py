@@ -85,7 +85,8 @@ class LoopConfig:
     
     # False positive injection (Improvement #1)
     inject_false_positives: bool = True
-    num_false_positives: int = 2
+    inject_false_positives: bool = True
+    num_false_positives: int = 3  # Updated by API based on rate
     
     # Data paths
     state_dir: str = "data/agent_state"
@@ -95,6 +96,7 @@ class LoopConfig:
     seeing_mean: float = 1.0
     cloud_mean: float = 0.2
     
+
     # Memory hygiene (Improvement #8)
     enable_memory_manager: bool = True
     memory_max_candidates: int = 50
@@ -102,6 +104,10 @@ class LoopConfig:
     
     # Decision logging (Improvement #6)
     enable_decision_logging: bool = True
+    
+    # Agent settings
+    confirm_threshold: float = 0.8
+    weather_enabled: bool = True
 
 
 @dataclass
@@ -218,9 +224,11 @@ class OODALoop:
             logger.info("3. Initializing WeatherSystem...")
             self._weather = WeatherSystem(
                 seed=self.config.random_seed,
-                seeing_mean=self.config.seeing_mean,
-                cloud_mean=self.config.cloud_mean
+                seeing_mean=self.config.seeing_mean if self.config.weather_enabled else 0.5,  # Ideal seeing if disabled
+                cloud_mean=self.config.cloud_mean if self.config.weather_enabled else 0.0     # Clear skies if disabled
             )
+            if not self.config.weather_enabled:
+                logger.info("   ⚠️ Weather simulation DISABLED (using ideal conditions)")
             logger.info("   ✓ Weather system ready")
             
             # 4. Initialize Image Differencer
@@ -234,7 +242,11 @@ class OODALoop:
             
             # 5. Initialize Agent
             logger.info("5. Initializing SentinelAgent...")
-            self._agent = SentinelAgent()
+            # TODO: Update Agent to accept confirm_threshold if supported, or handle in decision logic
+            self._agent = SentinelAgent(
+                confirm_threshold=self.config.confirm_threshold,
+                temperature=0.2
+            )
             if not self._agent.test_connection():
                 raise RuntimeError("Failed to connect to Gemini API")
             logger.info("   ✓ Gemini connection verified")

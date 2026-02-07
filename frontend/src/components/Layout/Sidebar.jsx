@@ -35,8 +35,11 @@ function getMarathonConfig() {
         num_stars: merged.num_stars,
         num_transients: merged.num_transients,
         inject_false_positives: merged.inject_false_positives,
+        false_positive_rate: merged.false_positive_rate,
+        confirm_threshold: merged.confirm_threshold,
+        weather_enabled: merged.weather_enabled,
         step_interval_hours: merged.step_interval_hours,
-        random_seed: merged.use_random_seed === true ? null : merged.random_seed,
+        random_seed: merged.use_random_seed ? null : merged.random_seed,
       }
     }
   } catch {
