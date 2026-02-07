@@ -10,6 +10,16 @@ import './Dashboard.css'
 function Dashboard({ marathonState, contextState, resetKey }) {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [fetchedIterations, setFetchedIterations] = useState([])
+  
+  // Load stored configuration on mount (lazy init)
+  const [storedMaxIterations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sentinel-config')
+      return saved ? (JSON.parse(saved).max_iterations || 16) : 16
+    } catch {
+      return 16
+    }
+  })
 
   // Fetch iterations history from API
   useEffect(() => {
@@ -61,6 +71,11 @@ function Dashboard({ marathonState, contextState, resetKey }) {
 
   // Get current iteration - try multiple sources
   const currentIter = marathonState.currentIteration || contextState?.iteration
+  
+  // Use stored max iterations if not running
+  const maxIterations = marathonState.isRunning 
+    ? marathonState.maxIterations 
+    : storedMaxIterations
 
   return (
     <div className="dashboard">
@@ -89,6 +104,7 @@ function Dashboard({ marathonState, contextState, resetKey }) {
           <Timeline
             iterations={iterations}
             currentIteration={marathonState.currentIteration}
+            totalIterations={maxIterations}
           />
         </div>
       </div>

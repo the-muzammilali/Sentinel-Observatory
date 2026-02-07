@@ -1,11 +1,10 @@
 import { Clock } from 'lucide-react'
 import './Timeline.css'
 
-function Timeline({ iterations, currentIteration }) {
-  const maxIterations = Math.max(iterations.length, 16)
+function Timeline({ iterations, currentIteration, totalIterations }) {
+  const maxIterations = totalIterations || Math.max(iterations.length, 16)
 
   const getIterationClass = (iter) => {
-    if (iter.iteration === currentIteration) return 'current'
     if (iter.weather?.observability === 'UNUSABLE') return 'unusable'
     if (iter.num_candidates > 0) return 'active'
     return 'normal'
@@ -24,17 +23,32 @@ function Timeline({ iterations, currentIteration }) {
       </div>
 
       <div className="timeline-track">
-        {Array.from({ length: maxIterations }, (_, i) => {
-          const iter = iterations.find(it => it.iteration === i + 1)
+        <div className="timeline-progress-bg">
+          <div 
+            className="timeline-progress-fill" 
+            style={{ width: `${Math.min((currentIteration / maxIterations) * 100, 100)}%` }}
+          />
+        </div>
+        
+        {/* Render markers for interesting iterations only to avoid clutter */}
+        {iterations.map((iter) => {
+          // Only show markers for active (candidates found) or unusable (bad weather) iterations
+          // Or the current one if it's not the last one
+          const isInteresting = iter.num_candidates > 0 || iter.weather?.observability === 'UNUSABLE'
+          
+          if (!isInteresting) return null
+
+          const position = (iter.iteration / maxIterations) * 100
+          
           return (
             <div
-              key={i}
-              className={`timeline-point ${iter ? getIterationClass(iter) : 'pending'}`}
-              title={iter ? `Iteration ${iter.iteration}: ${iter.num_candidates} candidates` : `Iteration ${i + 1}`}
+              key={iter.iteration}
+              className={`timeline-marker ${getIterationClass(iter)}`}
+              style={{ left: `${position}%` }}
+              title={`Iteration ${iter.iteration}: ${iter.num_candidates} candidates`}
             >
-              <div className="point-marker" />
-              {iter?.num_candidates > 0 && (
-                <div className="point-indicator">{iter.num_candidates}</div>
+              {iter.num_candidates > 0 && (
+                <div className="marker-indicator">{iter.num_candidates}</div>
               )}
             </div>
           )
