@@ -7,7 +7,7 @@ import LightCurve from '../components/Visualization/LightCurve'
 import GroundTruth from '../components/Dashboard/GroundTruth'
 import './Dashboard.css'
 
-function Dashboard({ marathonState, contextState }) {
+function Dashboard({ marathonState, contextState, resetKey }) {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [fetchedIterations, setFetchedIterations] = useState([])
 
@@ -31,6 +31,9 @@ function Dashboard({ marathonState, contextState }) {
       return () => clearInterval(interval)
     }
   }, [marathonState.isRunning])
+
+  // Note: Child components remount via key={resetKey} so they automatically reset
+  // Dashboard's fetchedIterations will naturally clear when no running marathon serves data
 
   // Merge fetched iterations with current context iteration
   const iterations = useMemo(() => {
@@ -65,6 +68,7 @@ function Dashboard({ marathonState, contextState }) {
       <div className="dashboard-row dashboard-row-main">
         <div className="dashboard-panel telescope-panel">
           <TelescopeView
+            key={`telescope-${resetKey}`}
             marathonState={marathonState}
             contextState={contextState}
             currentIteration={currentIter}
@@ -72,6 +76,7 @@ function Dashboard({ marathonState, contextState }) {
         </div>
         <div className="dashboard-panel agent-panel">
           <AgentLog
+            key={`agent-${resetKey}`}
             marathonState={marathonState}
             contextState={contextState}
           />
@@ -104,6 +109,7 @@ function Dashboard({ marathonState, contextState }) {
         </div>
         <div className="dashboard-panel groundtruth-panel">
           <GroundTruth
+            key={`groundtruth-${resetKey}`}
             marathonState={marathonState}
           />
         </div>

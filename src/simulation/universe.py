@@ -318,9 +318,13 @@ class UniverseController:
         self.current_time = start_time or datetime.now()
         self.start_time = self.current_time
         
-        # Set random seed for reproducibility
+        # Set GLOBAL seed for ScopeSim compatibility (it uses np.random internally)
+        # Without this, ScopeSim may hang on certain random states
         if random_seed is not None:
             np.random.seed(random_seed)
+        
+        # ALSO use isolated RNG for our own reproducible star generation
+        self._rng = np.random.default_rng(random_seed)
         
         # Generate static star field
         self.static_stars: List[Star] = self._generate_stars(num_stars)
@@ -340,14 +344,14 @@ class UniverseController:
         """Generate random static stars"""
         stars = []
         
-        # Random positions across the field
+        # Random positions across the field (using isolated RNG)
         half_field = self.field_size / 2
-        x_positions = np.random.uniform(-half_field, half_field, num_stars)
-        y_positions = np.random.uniform(-half_field, half_field, num_stars)
+        x_positions = self._rng.uniform(-half_field, half_field, num_stars)
+        y_positions = self._rng.uniform(-half_field, half_field, num_stars)
         
         # Realistic magnitude distribution (more faint stars than bright)
         # Power law distribution: N(m) ∝ 10^(0.6*m)
-        magnitudes = np.random.power(2.0, num_stars) * 6 + 14  # Range ~14-20
+        magnitudes = self._rng.power(2.0, num_stars) * 6 + 14  # Range ~14-20
         
         for x, y, mag in zip(x_positions, y_positions, magnitudes):
             stars.append(Star(x=float(x), y=float(y), magnitude=float(mag)))

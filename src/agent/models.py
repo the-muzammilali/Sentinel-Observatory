@@ -77,9 +77,9 @@ class Candidate(BaseModel):
         default_factory=list,
         description="Timeline of observations"
     )
-    status: Literal["NEW", "MONITORING", "CONFIRMED", "REJECTED"] = Field(
+    status: Literal["NEW", "MONITORING", "BRIGHTENING", "ALERTED", "REJECTED"] = Field(
         default="NEW",
-        description="Current tracking status"
+        description="Current tracking status: NEW→MONITORING→BRIGHTENING→ALERTED/REJECTED"
     )
     hypothesis: Optional[str] = Field(
         None,
@@ -121,7 +121,7 @@ class Candidate(BaseModel):
             # Check for brightening pattern
             mags = [h.magnitude for h in self.history[-3:] if h.magnitude is not None]
             if len(mags) >= 2 and mags[-1] < mags[0]:  # Brightening (lower mag = brighter)
-                self.status = "CONFIRMED"
+                self.status = "BRIGHTENING"
         elif len(self.history) >= 2 and self.status == "NEW":
             self.status = "MONITORING"
     

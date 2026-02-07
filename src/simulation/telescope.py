@@ -85,6 +85,30 @@ class TelescopeCamera:
             logger.error(f"Failed to initialize optical train: {e}")
             return False
     
+    def reset(self) -> None:
+        """
+        Reset the telescope camera for a fresh run.
+        
+        Clears the optical train and forces reinitialization on next use.
+        This helps prevent ScopeSim internal state from causing issues
+        between marathon runs.
+        """
+        import gc
+        
+        logger.info("Resetting TelescopeCamera...")
+        
+        # Clear optical train reference
+        if self._optical_train is not None:
+            del self._optical_train
+            self._optical_train = None
+        
+        self._initialized = False
+        
+        # Force garbage collection to release ScopeSim resources
+        gc.collect()
+        
+        logger.info("✓ TelescopeCamera reset complete")
+    
     def set_seeing(self, seeing: float) -> None:
         """
         Set atmospheric seeing.
@@ -152,9 +176,6 @@ class TelescopeCamera:
         
         # Run observation
         logger.info(f"Observing with {exp_time}s exposure, seeing={self._seeing}\"...")
-        # Randomize seed for realistic readout noise every time
-        import time
-        np.random.seed(int(time.time() * 1000) % 2**32)
         
         hdu_list = self._optical_train.observe(source, run_this_duration=exp_time)
         # Readout detector

@@ -776,7 +776,7 @@ class OODALoop:
             if ground_truth > 0:
                 confirmed = sum(
                     1 for c in self._context.candidates 
-                    if c.status == "CONFIRMED"
+                    if c.status in ("BRIGHTENING", "ALERTED")
                 ) if self._context else 0
                 accuracy = confirmed / ground_truth
             

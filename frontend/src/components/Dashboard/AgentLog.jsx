@@ -122,6 +122,33 @@ function AgentLog({ marathonState }) {
     }
   }, [marathonState.isRunning, handleLogMessage])
 
+  // Fetch log history on mount if marathon is running (for page refresh recovery)
+  useEffect(() => {
+    const fetchLogHistory = async () => {
+      // Only fetch if marathon is running and we have no logs (e.g., page refresh)
+      if (!marathonState.isRunning || logs.length > 0) return
+      
+      try {
+        const response = await fetch('http://localhost:8000/api/marathon/logs')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.logs && data.logs.length > 0) {
+            // Process each historical log through handleLogMessage
+            data.logs.forEach(log => handleLogMessage(log))
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch log history:', error)
+      }
+    }
+    
+    fetchLogHistory()
+  // Only run on mount - logs.length check inside prevents re-fetching
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marathonState.isRunning])
+
+  // Note: Component remounts via key={resetKey} in parent, so state automatically resets
+
   // Auto-scroll to bottom
   useEffect(() => {
     if (autoScroll && logContainerRef.current) {

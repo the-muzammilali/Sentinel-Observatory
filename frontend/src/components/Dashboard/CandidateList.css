@@ -62,8 +62,12 @@
   box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.3);
 }
 
-.candidate-item.confirmed {
-  border-left: 3px solid var(--status-confirmed);
+.candidate-item.alerted {
+  border-left: 3px solid var(--status-alerted, #22c55e);
+}
+
+.candidate-item.brightening {
+  border-left: 3px solid var(--status-brightening, #f59e0b);
 }
 
 .candidate-item.monitoring {
@@ -115,7 +119,8 @@
   letter-spacing: 0.05em;
 }
 
-.status-icon.confirmed { color: var(--status-confirmed); }
+.status-icon.alerted { color: var(--status-alerted, #22c55e); }
+.status-icon.brightening { color: var(--status-brightening, #f59e0b); }
 .status-icon.monitoring { color: var(--status-monitoring); }
 .status-icon.new { color: var(--status-new); }
 

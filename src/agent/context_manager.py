@@ -317,7 +317,7 @@ class ContextManager:
             "start_time": first.simulated_time,
             "current_time": latest.simulated_time,
             "total_candidates": len(latest.candidates),
-            "confirmed_candidates": len([c for c in latest.candidates if c.status == "CONFIRMED"]),
+            "confirmed_candidates": len([c for c in latest.candidates if c.status in ("BRIGHTENING", "ALERTED")]),
             "alerts_triggered": latest.alerts_triggered,
             "total_observations": latest.total_observations
         }

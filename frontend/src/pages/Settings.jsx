@@ -6,6 +6,8 @@ const DEFAULT_CONFIG = {
   max_iterations: 16,
   num_stars: 100,
   num_transients: 2,
+  use_random_seed: true,
+  random_seed: 42,
   inject_false_positives: true,
   false_positive_rate: 0.3,
   step_interval_hours: 0.5,
@@ -119,6 +121,37 @@ function Settings() {
                 <span className="setting-description">Actual transient events to inject</span>
               </div>
             </div>
+
+            <div className="setting-divider"></div>
+
+            <div className="setting-toggle">
+              <div className="toggle-info">
+                <label>Randomize Star Field</label>
+                <span className="setting-description">Use a different star pattern each marathon</span>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={config.use_random_seed}
+                  onChange={(e) => handleChange('use_random_seed', e.target.checked)}
+                />
+                <span className="slider round"></span>
+              </label>
+            </div>
+
+            {!config.use_random_seed && (
+              <div className="setting-item nested">
+                <label>Fixed Seed</label>
+                <input
+                  type="number"
+                  value={config.random_seed}
+                  onChange={(e) => handleChange('random_seed', parseInt(e.target.value) || 1)}
+                  min={1}
+                  max={10000}
+                />
+                <span className="setting-description">Seed range: 1 - 10,000</span>
+              </div>
+            )}
 
             <div className="setting-divider"></div>
 

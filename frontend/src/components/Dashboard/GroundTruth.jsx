@@ -49,6 +49,8 @@ function GroundTruth({ marathonState }) {
     return () => clearInterval(interval)
   }, [marathonState.isRunning, marathonState.status])
 
+  // Note: Component remounts via key={resetKey} in parent, so state automatically resets
+
   const getScoreClass = (score) => {
     if (score >= 0.8) return 'excellent'
     if (score >= 0.6) return 'good'

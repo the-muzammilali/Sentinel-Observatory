@@ -19,6 +19,8 @@ function App() {
 
   const [contextState, setContextState] = useState(null)
   const [wsConnected, setWsConnected] = useState(false)
+  // Key that increments on each new marathon to force child components to remount fresh
+  const [marathonResetKey, setMarathonResetKey] = useState(0)
 
   // Message handler for WebSocket
   const handleWsMessage = useCallback((data) => {
@@ -28,9 +30,8 @@ function App() {
           ...prev,
           ...data.marathon,
         }))
-        if (data.context) {
-          setContextState(data.context)
-        }
+        // Always update contextState (including null to clear old data)
+        setContextState(data.context ?? null)
         break
       case 'iteration_complete':
         setMarathonState(prev => ({
@@ -135,6 +136,16 @@ function App() {
   }, [handleWsMessage])
 
   const handleStartMarathon = async (config) => {
+    // Clear all state for a fresh marathon start
+    setContextState(null)
+    setMarathonResetKey(prev => prev + 1) // Force child components to remount
+    setMarathonState(prev => ({
+      ...prev,
+      currentIteration: 0,
+      status: 'idle',
+      error: undefined,
+    }))
+
     try {
       const response = await fetch('http://localhost:8000/api/marathon/start', {
         method: 'POST',
@@ -206,6 +217,7 @@ function App() {
                   <Dashboard
                     marathonState={marathonState}
                     contextState={contextState}
+                    resetKey={marathonResetKey}
                   />
                 }
               />

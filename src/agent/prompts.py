@@ -71,7 +71,7 @@ Move telescope to specific coordinates. Use when:
 
 ### `trigger_alert`
 Confirm a transient detection and raise an alert. Use when:
-- Candidate has been observed 3+ times (CONFIRMED status)
+- Candidate has been observed 3+ times with brightening pattern (BRIGHTENING status)
 - Shows clear brightening pattern (magnitude decreasing over time)
 - High confidence (>0.8)
 
@@ -84,7 +84,8 @@ Skip this observation cycle. Use when:
 ## Candidate Status Rules
 - **NEW**: First detection, unconfirmed - needs re-observation
 - **MONITORING**: Seen 2+ times, tracking brightness evolution
-- **CONFIRMED**: 3+ detections with clear transient behavior → ready for alert
+- **BRIGHTENING**: 3+ detections with clear brightening pattern → ready for alert
+- **ALERTED**: Alert has been triggered for this candidate
 - **REJECTED**: Determined to be artifact, cosmic ray, or non-variable source
 
 ## Transient Classification Guidelines
@@ -167,7 +168,7 @@ Move telescope to specific coordinates. Use when:
 
 ### `trigger_alert` 
 Confirm a transient and raise alert. Use when:
-- Candidate observed 3+ times (CONFIRMED status)
+- Candidate observed 3+ times with brightening (BRIGHTENING status)
 - Shows clear brightening pattern over time
 - High confidence (>0.8) based on accumulated evidence
 
@@ -179,7 +180,8 @@ Skip this observation. Use when:
 ## Candidate Status Rules
 - **NEW**: First detection, unconfirmed → needs re-observation
 - **MONITORING**: Seen 2+ times, tracking brightness evolution
-- **CONFIRMED**: 3+ detections with clear transient behavior → ready for alert
+- **BRIGHTENING**: 3+ detections with clear brightening pattern → ready for alert
+- **ALERTED**: Alert has been triggered for this candidate
 - **REJECTED**: Determined to be artifact, cosmic ray, or non-variable
 
 ## Transient Classification Guidelines
@@ -289,7 +291,7 @@ Output your decision as a JSON object matching the AgentDecision schema.
   "history": [
     {{"time": "...", "magnitude": float or null, "note": "...", "confidence": 0.0-1.0}}
   ],
-  "status": "NEW" | "MONITORING" | "CONFIRMED" | "REJECTED",
+  "status": "NEW" | "MONITORING" | "BRIGHTENING" | "ALERTED" | "REJECTED",
   "hypothesis": "Classification or null",
   "confidence": 0.0-1.0
 }}
@@ -329,7 +331,7 @@ Input: First observation, one bright region detected in difference image
 }
 ```
 
-### Example 2: Confirmed Brightening - Trigger Alert
+### Example 2: Brightening Candidate - Trigger Alert
 Input: Third observation of CAND_01, showing continued brightening
 ```json
 {
@@ -348,13 +350,13 @@ Input: Third observation of CAND_01, showing continued brightening
         {"time": "2024-03-15T01:30:00", "magnitude": 17.2, "note": "Brightening", "confidence": 0.85},
         {"time": "2024-03-15T02:00:00", "magnitude": 16.0, "note": "Continued rise", "confidence": 0.92}
       ],
-      "status": "CONFIRMED",
+      "status": "ALERTED",
       "hypothesis": "Type Ia Supernova",
       "confidence": 0.92
     }
   ],
   "confidence": 0.92,
-  "thought_signature_update": "ALERT: CAND_01 confirmed Type Ia SN, 2.5 mag rise.",
+  "thought_signature_update": "ALERT: CAND_01 alerted as Type Ia SN, 2.5 mag rise.",
   "new_detections": 0
 }
 ```

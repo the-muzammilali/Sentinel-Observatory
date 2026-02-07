@@ -42,6 +42,7 @@ class MarathonState:
         self._websocket_clients: list[WebSocket] = []
         self._log_queue: asyncio.Queue = asyncio.Queue()
         self._stop_requested = False
+        self._log_history: list[dict] = []  # Store logs for retrieval on refresh
     
     def to_dict(self):
         return {
@@ -67,6 +68,7 @@ class MarathonConfig(BaseModel):
     inject_false_positives: bool = True
     false_positive_rate: float = 0.3
     step_interval_hours: float = 0.5
+    random_seed: Optional[int] = None  # None = random each run
 
 class StatusResponse(BaseModel):
     success: bool
@@ -120,6 +122,24 @@ async def start_marathon(config: MarathonConfig):
     if marathon_state.is_running:
         raise HTTPException(status_code=400, detail="Marathon already running")
     
+    # Clear old observation files to prevent stale images from loading
+    obs_dir = Path("data/observations")
+    if obs_dir.exists():
+        for img_file in obs_dir.glob("iteration_*.png"):
+            try:
+                img_file.unlink()
+            except Exception:
+                pass
+        for img_file in obs_dir.glob("iteration_*_diff.png"):
+            try:
+                img_file.unlink()
+            except Exception:
+                pass
+    
+    # Clear any lingering context state and log history
+    marathon_state.context_state = None
+    marathon_state._log_history = []
+    
     marathon_state.is_running = True
     marathon_state.is_paused = False
     marathon_state.status = "running"
@@ -149,6 +169,9 @@ async def stop_marathon():
     marathon_state._stop_requested = True
     marathon_state.is_running = False
     marathon_state.status = "idle"
+    marathon_state.context_state = None  # Clear old data so fresh start shows empty state
+    marathon_state.current_iteration = 0
+    marathon_state.ooda_loop = None
     
     await broadcast_state_update()
     
@@ -176,6 +199,17 @@ async def get_marathon_status():
     return {
         "marathon": marathon_state.to_dict(),
         "context": marathon_state.context_state,
+    }
+
+@app.get("/api/marathon/logs")
+async def get_marathon_logs():
+    """Get log history for current/last marathon session.
+    
+    Used to restore logs after page refresh during active session.
+    """
+    return {
+        "logs": marathon_state._log_history,
+        "count": len(marathon_state._log_history),
     }
 
 # ============================================================================
@@ -262,7 +296,7 @@ async def get_iteration_image(
     return Response(
         content=buffer.getvalue(),
         media_type="image/png",
-        headers={"Cache-Control": "max-age=3600"}
+        headers={"Cache-Control": "no-store"}  # Prevent caching of iteration images
     )
 
 
@@ -286,7 +320,13 @@ async def get_ground_truth():
     # Get from active OODA loop if available
     if marathon_state.ooda_loop and marathon_state.ooda_loop._ground_truth:
         try:
-            metrics = marathon_state.ooda_loop._ground_truth.get_metrics()
+            gt = marathon_state.ooda_loop._ground_truth
+            metrics = gt.get_metrics()
+            # Count only real transients, not artifacts/false positives
+            real_transients = sum(1 for e in gt.events.values() if e.is_real_transient)
+            # Count detected transients (real transients where agent triggered an alert)
+            detected_count = sum(1 for e in gt.events.values() if e.is_real_transient and e.alert_triggered)
+            logger.debug(f"Ground truth: TP={metrics.true_positives}, alerted={detected_count}, total_real={real_transients}")
             return {
                 "precision": metrics.precision,
                 "recall": metrics.recall,
@@ -294,10 +334,11 @@ async def get_ground_truth():
                 "true_positives": metrics.true_positives,
                 "false_positives": metrics.false_positives,
                 "false_negatives": metrics.false_negatives,
-                "total_transients": len(marathon_state.ooda_loop._ground_truth.events),
-                "detected_transients": metrics.true_positives,
+                "total_transients": real_transients,
+                "detected_transients": detected_count,  # Count of real transients detected by agent
             }
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error getting ground truth metrics: {e}")
             pass
     
     return {
@@ -394,10 +435,13 @@ async def websocket_marathon(websocket: WebSocket):
     
     try:
         # Send initial state
+        # Only send context if marathon is actively running
+        # This ensures page refresh shows clean state when not in active session
+        initial_context = marathon_state.context_state if marathon_state.is_running else None
         await websocket.send_json({
             "type": "state_update",
             "marathon": marathon_state.to_dict(),
-            "context": marathon_state.context_state,
+            "context": initial_context,
         })
         
         # Keep connection alive and handle incoming messages
@@ -486,14 +530,18 @@ async def stream_agent_log():
     )
 
 async def emit_log_message(message_type: str, content: str, **kwargs):
-    """Emit a log message to SSE stream."""
-    await marathon_state._log_queue.put({
+    """Emit a log message to SSE stream and store in history."""
+    log_entry = {
         "type": message_type,
         "content": content,
         "iteration": marathon_state.current_iteration,
         "timestamp": datetime.now().isoformat(),
         **kwargs,
-    })
+    }
+    # Store in history for retrieval on page refresh
+    marathon_state._log_history.append(log_entry)
+    # Also queue for SSE streaming
+    await marathon_state._log_queue.put(log_entry)
 
 # ============================================================================
 # MARATHON EXECUTION (ASYNC)
@@ -512,13 +560,25 @@ async def run_marathon_async(config: MarathonConfig):
         from src.ooda_loop import OODALoop, LoopConfig
         
         # Create OODA loop config
+        # Generate truly random seed if not provided (using system entropy)
+        if config.random_seed:
+            effective_seed = config.random_seed
+        else:
+            import os
+            import time as time_module
+            # Use system entropy + time for truly random seed (1-10000 range for ScopeSim)
+            entropy = int.from_bytes(os.urandom(4), 'big') ^ int(time_module.time() * 1000)
+            effective_seed = (entropy % 10000) + 1
+        
         loop_config = LoopConfig(
             max_iterations=config.max_iterations,
             num_stars=config.num_stars,
             num_transients=config.num_transients,
             inject_false_positives=config.inject_false_positives,
             step_interval_hours=config.step_interval_hours,
+            random_seed=effective_seed,
         )
+        logger.info(f"Using random seed: {effective_seed}")
         
         # Initialize OODA loop
         await emit_log_message("info", "Initializing OODA loop components...")

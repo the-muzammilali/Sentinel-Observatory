@@ -22,16 +22,34 @@ function getMarathonConfig() {
     num_transients: 2,
     inject_false_positives: true,
     step_interval_hours: 0.5,
+    use_random_seed: true,
+    random_seed: 42,
   }
   try {
     const saved = localStorage.getItem('sentinel-config')
     if (saved) {
-      return { ...defaults, ...JSON.parse(saved) }
+      const merged = { ...defaults, ...JSON.parse(saved) }
+      // Only send random_seed to API if NOT using random mode
+      return {
+        max_iterations: merged.max_iterations,
+        num_stars: merged.num_stars,
+        num_transients: merged.num_transients,
+        inject_false_positives: merged.inject_false_positives,
+        step_interval_hours: merged.step_interval_hours,
+        random_seed: merged.use_random_seed ? null : merged.random_seed,
+      }
     }
   } catch {
     // Invalid JSON, use defaults
   }
-  return defaults
+  return {
+    max_iterations: defaults.max_iterations,
+    num_stars: defaults.num_stars,
+    num_transients: defaults.num_transients,
+    inject_false_positives: defaults.inject_false_positives,
+    step_interval_hours: defaults.step_interval_hours,
+    random_seed: null, // Default: random each run
+  }
 }
 
 function Sidebar({ marathonState, contextState, onStart, onStop, onPause }) {

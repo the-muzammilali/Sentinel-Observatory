@@ -188,7 +188,7 @@ class SessionRecorder:
         for iteration in self._iterations:
             for candidate in iteration.candidates:
                 status = candidate.get("status", "").upper()
-                if status == "CONFIRMED":
+                if status in ("BRIGHTENING", "ALERTED"):
                     confirmed_count += 1
                 elif status == "REJECTED":
                     rejected_count += 1

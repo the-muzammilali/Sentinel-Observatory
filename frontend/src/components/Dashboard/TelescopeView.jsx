@@ -32,7 +32,9 @@ function TelescopeView({ marathonState, contextState, currentIteration }) {
     setError(null)
     try {
       const type = showDiff ? 'diff' : 'current'
-      const url = `http://localhost:8000/api/iteration/${currentIteration}/image?type=${type}`
+      // Add timestamp to bust cache and prevent stale images from previous marathons
+      const timestamp = Date.now()
+      const url = `http://localhost:8000/api/iteration/${currentIteration}/image?type=${type}&t=${timestamp}`
       const response = await fetch(url)
       
       if (response.ok) {
@@ -62,6 +64,22 @@ function TelescopeView({ marathonState, contextState, currentIteration }) {
       loadImage()
     }
   }, [currentIteration, showDiff, marathonState.isRunning, loadImage])
+
+  // Reset state when a new marathon starts
+  useEffect(() => {
+    if (marathonState.isRunning && marathonState.currentIteration === 0) {
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current)
+        imageUrlRef.current = null
+      }
+      setImageUrl(null)
+      setZoom(1)
+      setPan({ x: 0, y: 0 })
+      setPanMode(false)
+      setError(null)
+      loadedRef.current = { iteration: null, showDiff: false }
+    }
+  }, [marathonState.isRunning, marathonState.currentIteration])
 
   // Reset pan when zoom resets to 1
   useEffect(() => {

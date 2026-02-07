@@ -1,10 +1,10 @@
-import { List, MapPin, TrendingUp, AlertCircle } from 'lucide-react'
+import { List, MapPin, TrendingUp, AlertCircle, Bell, Sun } from 'lucide-react'
 import './CandidateList.css'
 
 function CandidateList({ candidates, selectedCandidate, onSelectCandidate }) {
   const sortedCandidates = [...candidates].sort((a, b) => {
     // Sort by status priority, then confidence
-    const statusPriority = { CONFIRMED: 0, MONITORING: 1, NEW: 2, REJECTED: 3 }
+    const statusPriority = { ALERTED: 0, BRIGHTENING: 1, MONITORING: 2, NEW: 3, REJECTED: 4 }
     const priorityDiff = statusPriority[a.status] - statusPriority[b.status]
     if (priorityDiff !== 0) return priorityDiff
     return b.confidence - a.confidence
@@ -12,8 +12,10 @@ function CandidateList({ candidates, selectedCandidate, onSelectCandidate }) {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'CONFIRMED':
-        return <AlertCircle size={14} className="status-icon confirmed" />
+      case 'ALERTED':
+        return <Bell size={14} className="status-icon alerted" />
+      case 'BRIGHTENING':
+        return <Sun size={14} className="status-icon brightening" />
       case 'MONITORING':
         return <TrendingUp size={14} className="status-icon monitoring" />
       case 'NEW':

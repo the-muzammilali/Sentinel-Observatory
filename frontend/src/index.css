@@ -29,10 +29,11 @@
   --text-inverse: #020617;   /* slate-950 */
 
   /* Status colors */
-  --status-new: #0ea5e9;       /* sky-500 */
-  --status-monitoring: #f59e0b; /* amber-500 */
-  --status-confirmed: #10b981;  /* emerald-500 */
-  --status-rejected: #64748b;   /* slate-500 */
+  --status-new: #0ea5e9;          /* sky-500 */
+  --status-monitoring: #8b5cf6;   /* violet-500 */
+  --status-brightening: #f59e0b;  /* amber-500 */
+  --status-alerted: #22c55e;      /* green-500 */
+  --status-rejected: #64748b;     /* slate-500 */
   
   /* Weather observability */
   --weather-excellent: #10b981;
@@ -325,13 +326,18 @@ pre {
 }
 
 .badge-monitoring {
-  background: rgba(245, 158, 11, 0.2);
+  background: rgba(139, 92, 246, 0.2);
   color: var(--status-monitoring);
 }
 
-.badge-confirmed {
-  background: rgba(16, 185, 129, 0.2);
-  color: var(--status-confirmed);
+.badge-brightening {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--status-brightening);
+}
+
+.badge-alerted {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--status-alerted);
 }
 
 .badge-rejected {

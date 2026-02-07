@@ -3,7 +3,7 @@ Memory hygiene and decay management for long-running Sentinel sessions.
 
 Implements:
 - Token budget management for LLM context window
-- Candidate lifecycle (NEW → MONITORING → CONFIRMED/REJECTED → ARCHIVED → PRUNED)
+- Candidate lifecycle (NEW → MONITORING → BRIGHTENING/REJECTED → ALERTED → ARCHIVED → PRUNED)
 - Age-based pruning with configurable thresholds
 - Candidate reactivation on new anomalies
 - Archive summarization for minimal token usage
@@ -266,7 +266,7 @@ class MemoryManager:
         threshold = timedelta(hours=self.config.stale_threshold_hours)
         
         for candidate in candidates:
-            if candidate.status not in ("CONFIRMED", "REJECTED"):
+            if candidate.status not in ("BRIGHTENING", "ALERTED", "REJECTED"):
                 last_obs = self._get_last_observation_time(candidate)
                 if last_obs and (current_time - last_obs) > threshold:
                     # Calculate hours stale
@@ -290,7 +290,7 @@ class MemoryManager:
         to_archive = []
         
         for candidate in candidates:
-            if candidate.status == "CONFIRMED":
+            if candidate.status in ("BRIGHTENING", "ALERTED"):
                 last_obs = self._get_last_observation_time(candidate)
                 if last_obs and (current_time - last_obs) > threshold:
                     summary = self.archive_candidate(candidate, current_time)
@@ -360,7 +360,8 @@ class MemoryManager:
         # Sort by priority (lower = archive first)
         def priority(c):
             status_priority = {
-                "CONFIRMED": 3,
+                "ALERTED": 4,
+                "BRIGHTENING": 3,
                 "MONITORING": 2,
                 "REJECTED": 1
             }
@@ -484,7 +485,7 @@ class MemoryManager:
         status = getattr(candidate, 'status', 'UNKNOWN')
         classification = getattr(candidate, 'classification', '').lower()
         
-        if status == "CONFIRMED":
+        if status in ("BRIGHTENING", "ALERTED"):
             return "confirmed"
         elif status == "REJECTED":
             # Check if it was a false positive
