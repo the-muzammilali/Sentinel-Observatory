@@ -2,10 +2,11 @@
 ImageDifferencer - Detect transients by comparing astronomical images
 
 Pipeline:
-1. Align images (sub-pixel registration)
-2. Compute difference image
-3. Detect candidate regions via sigma clipping
-4. Annotate candidates on output images
+1. WCS alignment (astrometric calibration)
+2. Align images (sub-pixel registration)
+3. Compute difference image
+4. Detect candidate regions via sigma clipping
+5. Annotate candidates on output images
 """
 
 import numpy as np
@@ -18,6 +19,9 @@ from scipy import ndimage
 from skimage import registration, exposure
 from skimage.feature import blob_dog
 
+# Astrometric calibration
+from .astrometry import AstrometricCalibrator, WCSAlignment
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +32,7 @@ class CandidateRegion:
     y: int  # Pixel y-coordinate
     significance: float  # How many sigma above background
     flux: float  # Brightness in the difference image
+    magnitude: float = 99.0  # Instrumental magnitude (calculated from flux)
 
 
 @dataclass
@@ -52,7 +57,10 @@ class ImageDifferencer:
         self,
         sigma_threshold: float = 3.0,  # Detection threshold (sigma)
         min_area: int = 4,  # Minimum area in pixels for a detection
-        max_candidates: int = 50  # Maximum candidates to return
+        max_candidates: int = 50,  # Maximum candidates to return
+        enable_wcs_alignment: bool = True,  # Enable astrometric calibration
+        field_size_arcsec: float = 10.0,  # Field of view
+        pixel_scale_arcsec: float = 0.004  # Pixel scale (MICADO)
     ):
         """
         Initialize the differencer.
@@ -61,13 +69,29 @@ class ImageDifferencer:
             sigma_threshold: Detection threshold in standard deviations
             min_area: Minimum contiguous pixels for a real detection
             max_candidates: Maximum number of candidates to report
+            enable_wcs_alignment: Enable WCS-based astrometric alignment
+            field_size_arcsec: Field of view in arcseconds
+            pixel_scale_arcsec: Pixel scale in arcsec/pixel
         """
         self.sigma_threshold = sigma_threshold
         self.min_area = min_area
         self.max_candidates = max_candidates
+        self.enable_wcs_alignment = enable_wcs_alignment
         
-        logger.info(f"ImageDifferencer initialized (sigma={sigma_threshold}, "
-                   f"min_area={min_area})")
+        # Initialize astrometric calibrator
+        if enable_wcs_alignment:
+            self.astrometry = AstrometricCalibrator(
+                field_size_arcsec=field_size_arcsec,
+                pixel_scale_arcsec=pixel_scale_arcsec,
+                image_size=1024  # Will be updated from actual image
+            )
+            logger.info(f"ImageDifferencer initialized with WCS alignment "
+                       f"(sigma={sigma_threshold}, min_area={min_area})")
+        else:
+            self.astrometry = None
+            logger.info(f"ImageDifferencer initialized WITHOUT WCS alignment "
+                       f"(sigma={sigma_threshold}, min_area={min_area})")
+
     
     def align_images(
         self,
@@ -91,7 +115,7 @@ class ImageDifferencer:
         shift, error, _ = registration.phase_cross_correlation(
             reference,
             current,
-            upsample_factor=10  # Sub-pixel precision
+            upsample_factor=100  # Increased from 10 for better sub-pixel alignment
         )
         
         # Apply shift to current image
@@ -163,11 +187,20 @@ class ImageDifferencer:
             # Calculate total flux in region
             flux = float(np.sum(diff_image[region_mask]))
             
+            # Convert flux to instrumental magnitude
+            # Magnitude = -2.5 * log10(flux) + zero_point
+            ZERO_POINT = 25.0  # Typical for astronomical imaging
+            if flux > 0:
+                magnitude = -2.5 * np.log10(flux) + ZERO_POINT
+            else:
+                magnitude = 99.0  # Non-detection value
+            
             candidates.append(CandidateRegion(
                 x=centroid_x,
                 y=centroid_y,
                 significance=peak_significance,
-                flux=flux
+                flux=flux,
+                magnitude=magnitude
             ))
         
         # Sort by significance (highest first)
@@ -242,7 +275,7 @@ class ImageDifferencer:
         current: np.ndarray
     ) -> DiffResult:
         """
-        Full differencing pipeline: align, subtract, detect.
+        Full differencing pipeline: WCS align, pixel align, subtract, detect.
         
         Args:
             reference: Reference image (clean baseline)
@@ -253,8 +286,25 @@ class ImageDifferencer:
         """
         logger.info("Processing image pair...")
         
-        # Step 1: Align images
-        aligned, shift, error = self.align_images(reference, current)
+        # Step 0: WCS-based astrometric alignment (if enabled)
+        if self.enable_wcs_alignment and self.astrometry is not None:
+            logger.info("Applying WCS-based astrometric alignment...")
+            
+            # Update image size from actual data
+            self.astrometry.image_size = reference.shape[0]
+            
+            # Perform WCS alignment
+            wcs_result = self.astrometry.align_images(reference, current)
+            
+            logger.info(f"WCS alignment quality: {wcs_result.alignment_quality:.1%}")
+            
+            # Use aligned image for subsequent processing
+            current_to_process = wcs_result.aligned_image
+        else:
+            current_to_process = current
+        
+        # Step 1: Sub-pixel alignment (phase correlation)
+        aligned, shift, error = self.align_images(reference, current_to_process)
         
         # Step 2: Compute difference
         diff = aligned - reference

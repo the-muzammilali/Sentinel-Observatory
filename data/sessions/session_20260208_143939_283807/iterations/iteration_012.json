@@ -1,0 +1,104 @@
+{
+  "iteration": 12,
+  "timestamp": "2026-02-08T14:49:25.167478",
+  "simulated_time": "2026-02-08T20:39:46.448094",
+  "weather": {
+    "seeing": 1.0691565349698067,
+    "cloud_extinction": 0.2,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 194,
+      "y": 796,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 12,
+      "hypothesis": "Fast Classical Nova",
+      "history": [
+        {
+          "time": "2026-02-08T14:39:46.448094",
+          "magnitude": 14.5,
+          "confidence": 0.7,
+          "note": "Initial detection at 11.5\u03c3 significance"
+        },
+        {
+          "time": "2026-02-08T15:09:46.448094",
+          "magnitude": 12.89,
+          "confidence": 0.85,
+          "note": "Confirmed brightening of 1.61 magnitudes"
+        },
+        {
+          "time": "2026-02-08T15:39:46.448094",
+          "magnitude": 11.8,
+          "confidence": 0.95,
+          "note": "Alert triggered after 3 consistent detections"
+        },
+        {
+          "time": "2026-02-08T16:09:46.448094",
+          "magnitude": 10.96,
+          "confidence": 0.98,
+          "note": "Rapid brightening continues at 180.4\u03c3"
+        },
+        {
+          "time": "2026-02-08T16:39:46.448094",
+          "magnitude": 10.53,
+          "confidence": 0.99,
+          "note": "Brightening trend persists at 290.6\u03c3"
+        },
+        {
+          "time": "2026-02-08T17:09:46.448094",
+          "magnitude": 10.39,
+          "confidence": 0.99,
+          "note": "Peak brightness reached; rate of rise slowed"
+        },
+        {
+          "time": "2026-02-08T17:39:46.448094",
+          "magnitude": 10.41,
+          "confidence": 0.99,
+          "note": "Slight decline observed post-peak"
+        },
+        {
+          "time": "2026-02-08T18:09:46.448094",
+          "magnitude": 10.61,
+          "confidence": 0.99,
+          "note": "Continued post-peak decline observed"
+        },
+        {
+          "time": "2026-02-08T18:39:46.448094",
+          "magnitude": 11.3,
+          "confidence": 0.99,
+          "note": "Rapid post-peak decline continues"
+        },
+        {
+          "time": "2026-02-08T19:09:46.448094",
+          "magnitude": 11.85,
+          "confidence": 0.99,
+          "note": "Consistent fading trend maintained"
+        },
+        {
+          "time": "2026-02-08T19:39:46.448094",
+          "magnitude": 12.77,
+          "confidence": 0.99,
+          "note": "Accelerated fading observed"
+        },
+        {
+          "time": "2026-02-08T20:09:46.448094",
+          "magnitude": 14.54,
+          "confidence": 0.99,
+          "note": "Source returned to baseline discovery magnitude"
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "**CAND_01: Iteration 12 Analysis**\n\nOkay, let's break down this twelfth observation of CAND_01. First, visually, the difference image is showing a single red circle precisely where we've been tracking this source at (194, 796). That's a good sign, confirms our target. Now for the crucial data: the tracked position is bang on at (194, 796), and the new detection data confirms this with a magnitude of 14.54 and a significance of 11.9\u03c3.\n\nLooking at the light curve history, we see a dramatic evolution: 14.5 (initial detection) -> 12.89 -> 11.8 -> 10.96 -> 10.53 -> 10.39 (peak) -> 10.41 -> 10.61 -> 11.3 -> 11.85 -> 12.77 -> *back* to 14.54! It has returned right back to where it started. The position is rock solid, no movement.\n\nThis rapid rise and fall, roughly a 4-magnitude brightening and then a 4-magnitude fading within such a short timescale \u2013 about 5.5 hours total \u2013 that's a *very* fast transient. I'm leaning heavily towards a fast classical nova, or potentially something even rarer within the class of fast-evolving optical transients. The falling significance (down to 11.9\u03c3) supports this; it's likely dropping below our detection limit soon.\n\nSince we\u2019ve already alerted, the event is, for all intents and purposes, over as it has returned to the discovery magnitude and the significance is low. However, I\u2019m going to recommend one final observation just to be absolutely certain it disappears entirely or plateaus to provide a final confirmation of the event, given the near-perfect symmetric light curve.\n\nTherefore, the action I'm recommending is `observe_again`. The target coordinates remain (194, 796). My reasoning is clear: CAND_01 has completed a complete rapid cycle, fading back to its initial magnitude. The total event duration (~5.5 hours) strongly aligns with a fast classical nova. I\u2019m requesting that final check to see if it definitively fades. I\u2019m updating the candidate history and setting the confidence to a very high 0.99. The thought signature for the update will be \"CAND_01 returned to baseline (14.54 mag). Event nearly complete. Classification: Fast Classical Nova.\" And, obviously, we have zero new detections to add. That's the plan.\n\n\n",
+    "confidence": 0.99
+  },
+  "num_detections": 1,
+  "alerts_triggered": 1,
+  "ground_truth": null,
+  "image_filename": "iteration_012.png"
+}

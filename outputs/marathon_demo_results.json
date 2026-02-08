@@ -1,0 +1,61 @@
+{
+  "success": true,
+  "iterations": [
+    {
+      "iteration": 1,
+      "phase": "quiet",
+      "action": "observe_again",
+      "reasoning": "No transient candidates were detected in the difference image. Weather conditions are excellent, so I will continue routine monitoring of the primary field.",
+      "candidates_count": 0
+    },
+    {
+      "iteration": 2,
+      "phase": "weather_recovery",
+      "action": "observe_again",
+      "reasoning": "A new point source was detected at (128, 128) that is not present in the reference image. Re-observing to confirm it is a real transient and not a cosmic ray.",
+      "candidates_count": 1
+    },
+    {
+      "iteration": 3,
+      "phase": "weather_recovery",
+      "action": "observe_again",
+      "reasoning": "New bright source detected at (128, 128) not present in reference image. Re-observing to confirm detection and rule out artifacts.",
+      "candidates_count": 1
+    },
+    {
+      "iteration": 4,
+      "phase": "confirmation",
+      "action": "observe_again",
+      "reasoning": "A new bright point source was detected at (500, 500) that is not present in the reference image. Re-observing to confirm the detection and rule out transient artifacts.",
+      "candidates_count": 1
+    },
+    {
+      "iteration": 5,
+      "phase": "complete",
+      "action": "observe_again",
+      "reasoning": "No transient candidates detected in the difference image. Field remains clear under excellent conditions.",
+      "candidates_count": 0
+    }
+  ],
+  "actions": [
+    "observe_again",
+    "observe_again",
+    "observe_again",
+    "observe_again",
+    "observe_again"
+  ],
+  "phases_completed": 3,
+  "score": 100.0,
+  "metrics": {
+    "true_positives": 0,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "true_negatives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "mean_latency_hours": 0.0,
+    "min_latency_hours": null,
+    "max_latency_hours": null
+  }
+}

@@ -191,7 +191,8 @@ class SentinelAgent:
         reference: np.ndarray,
         current: np.ndarray,
         diff_annotated: np.ndarray,
-        context: ContextState
+        context: ContextState,
+        detected_sources: Optional[List] = None
     ) -> AgentDecision:
         """
         Analyze telescope images and make a decision using persistent chat session.
@@ -207,6 +208,8 @@ class SentinelAgent:
             current: Current observation as numpy array
             diff_annotated: Difference image with annotations as numpy array
             context: Current agent state with candidates and history
+            detected_sources: Optional list of detected sources from differencer
+                            (with x, y, magnitude, significance)
         
         Returns:
             AgentDecision with action, reasoning, and updated candidates
@@ -233,7 +236,7 @@ class SentinelAgent:
             return create_default_wait_decision(f"Image preparation error: {e}")
         
         # Send observation to chat session
-        decision = self._send_observation(images, context)
+        decision = self._send_observation(images, context, detected_sources)
         
         logger.info(f"Decision: {decision.action} (confidence: {decision.confidence:.2f})")
         return decision
@@ -292,7 +295,8 @@ class SentinelAgent:
     def _send_observation(
         self,
         images: List[Image.Image],
-        context: ContextState
+        context: ContextState,
+        detected_sources: Optional[List] = None
     ) -> AgentDecision:
         """
         Send observation to the active chat session.
@@ -303,14 +307,15 @@ class SentinelAgent:
         Args:
             images: List of [reference, current, difference] PIL images
             context: Current context with weather and candidates
+            detected_sources: Optional list of detected sources from differencer
             
         Returns:
             Parsed AgentDecision from the model response
         """
         from .prompts import build_context_prompt
         
-        # Build observation message
-        observation_prompt = build_context_prompt(context)
+        # Build observation message with detected sources
+        observation_prompt = build_context_prompt(context, detected_sources)
         
         # Build content list with labeled images
         contents = []

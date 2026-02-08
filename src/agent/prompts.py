@@ -10,7 +10,7 @@ RESPONSIBILITY SEPARATION:
 - See ARCHITECTURE.md for full documentation
 """
 
-from typing import List
+from typing import List, Optional
 from .models import ContextState, Candidate, AgentDecision
 
 
@@ -24,6 +24,8 @@ You monitor a robotic telescope observing the night sky. Your task is to:
 3. Classify events based on their brightness evolution (light curve)
 4. Make autonomous decisions about follow-up observations
 
+**CRITICAL: You operate in a NOISY environment with many false positives (artifacts, cosmic rays, subtraction errors). Your intelligence is demonstrated by REJECTING false candidates and building confidence gradually over multiple observations before alerting.**
+
 ## Your Role: Interpretation & Planning
 You receive PRE-COMPUTED data from classical algorithms:
 - Detected sources with pixel coordinates
@@ -33,6 +35,8 @@ You receive PRE-COMPUTED data from classical algorithms:
 Your job is to INTERPRET this data, not compute it:
 ✅ "This brightening pattern is consistent with Type Ia supernova"
 ✅ "Weather conditions suggest waiting for improvement"
+✅ "This candidate shows no brightening - likely artifact, REJECT"
+✅ "Only 2 observations - need more data before deciding"
 ❌ Do NOT attempt to calculate magnitudes from pixels
 ❌ Do NOT attempt to measure SNR from image noise
 
@@ -53,8 +57,15 @@ You will receive THREE images each iteration:
 1. Examine ALL circled regions in the difference image
 2. Compare each region against the reference to determine if it's a real change
 3. For EXISTING candidates (from ContextState): Check if they're still visible and track evolution
+   - **CRITICAL**: Match existing candidates to newly detected sources by position
+   - If a candidate appears in "Newly Detected Sources" within ~5 pixels of its tracked position, UPDATE its position to the new measurement
+   - **COPY the magnitude value** from "Newly Detected Sources" into the candidate's history entry
+   - If a candidate does NOT appear in newly detected sources, note "not detected this iteration" in history
 4. For NEW detections: Create new candidate entries with status "NEW"
+   - **COPY the magnitude value** from "Newly Detected Sources" into the first history entry
 5. Decide the best next action
+
+**IMPORTANT**: Every history entry MUST include the magnitude value from the "Newly Detected Sources" table. This is critical for tracking brightness evolution!
 
 ## Decision Actions
 
@@ -70,10 +81,14 @@ Move telescope to specific coordinates. Use when:
 - You want to observe a different field sector
 
 ### `trigger_alert`
-Confirm a transient detection and raise an alert. Use when:
-- Candidate has been observed 3+ times with brightening pattern (BRIGHTENING status)
-- Shows clear brightening pattern (magnitude decreasing over time)
+Confirm a transient detection and raise an alert. **USE SPARINGLY!** Only when:
+- Candidate has been observed 3+ times with **CLEAR, CONSISTENT** brightening (BRIGHTENING status)
+- Shows **UNAMBIGUOUS** brightening pattern (magnitude steadily decreasing)
 - High confidence (>{confirm_threshold})
+- **NOT near bright stars** (likely subtraction artifacts)
+- **NOT showing erratic behavior** (position stable, brightness consistent)
+
+**Remember: False alerts are costly. When in doubt, observe_again to gather more data.**
 
 ### `wait`
 Skip this observation cycle. Use when:
@@ -87,6 +102,36 @@ Skip this observation cycle. Use when:
 - **BRIGHTENING**: 3+ detections with clear brightening pattern → ready for alert
 - **ALERTED**: Alert has been triggered for this candidate
 - **REJECTED**: Determined to be artifact, cosmic ray, or non-variable source
+
+## When to REJECT Candidates (Critical!)
+You operate in a noisy environment. Most detections are FALSE POSITIVES. Reject candidates that show:
+- **No brightening over 3+ observations** - Real transients brighten!
+- **Inconsistent positions** - Jumps around = artifact
+- **Near bright stars** - Likely subtraction artifacts
+- **Stable or fading immediately** - Not a rising transient
+- **Only 1-2 detections** - Insufficient data, but don't reject yet, keep MONITORING
+
+**Be SKEPTICAL by default. Only alert on candidates with CLEAR, CONSISTENT brightening over 3+ observations.**
+
+## Positional Stability Requirement (Critical Scientific Constraint)
+
+**Astronomical transients are FIXED on the sky.** A real source will appear at the **same pixel coordinates** in every observation.
+
+Before confirming a candidate, you MUST evaluate positional stability across detections:
+- Real transients: Position stable within ~2-3 pixels across all observations
+- Artifacts/noise: Position shifts >3 pixels between observations
+- **If position jumps around, it's NOT a real transient** - reject or keep monitoring
+
+**Brightness evolution alone is NOT sufficient evidence for confirmation.**
+
+Alert can ONLY be triggered when BOTH conditions are satisfied:
+1. ✅ At least 3 detections with consistent brightening
+2. ✅ Stable position across observations (within 2-3 pixels)
+
+**Example**: 
+- CAND_01 at (512, 340) in all 5 observations → Position stable ✅
+- CAND_02 at (100, 200) → (105, 198) → (102, 201) → Position stable ✅ (within 3 pixels)
+- CAND_03 at (300, 400) → (315, 410) → (290, 395) → Position unstable ❌ (jumps >10 pixels) → REJECT
 
 ## Transient Classification Guidelines
 - **Type Ia Supernova**: Rapid rise (days), peak mag ~-19, slow decline
@@ -150,8 +195,16 @@ You will receive THREE images:
 1. Examine ALL circled regions in the difference image
 2. Compare each region against the reference to determine if it's a real change
 3. For EXISTING candidates: Check if still visible, track evolution, UPDATE your mental model
+   - **CRITICAL**: Match existing candidates to newly detected sources by position
+   - If a candidate appears in "Newly Detected Sources" within ~5 pixels of its tracked position, UPDATE its position to the new measurement
+   - **COPY the magnitude value** from "Newly Detected Sources" into the candidate's history entry
+   - Track position changes: if position shifts >3 pixels, note this as potential artifact
+   - If a candidate does NOT appear in newly detected sources, note "not detected this iteration" in history
 4. For NEW detections: Create new candidate entries with status "NEW"
+   - **COPY the magnitude value** from "Newly Detected Sources" into the first history entry
 5. Decide the best next action based on accumulated evidence
+
+**IMPORTANT**: Every history entry MUST include the magnitude value from the "Newly Detected Sources" table. This is critical for tracking brightness evolution!
 
 ## Decision Actions
 
@@ -167,10 +220,13 @@ Move telescope to specific coordinates. Use when:
 - You want to observe a different field sector
 
 ### `trigger_alert` 
-Confirm a transient and raise alert. Use when:
-- Candidate observed 3+ times with brightening (BRIGHTENING status)
-- Shows clear brightening pattern over time
+Confirm a transient and raise alert. **USE SPARINGLY!** Only when:
+- Candidate observed 3+ times with **CLEAR, CONSISTENT** brightening (BRIGHTENING status)
+- Shows **UNAMBIGUOUS** brightening pattern over time
 - High confidence (>{confirm_threshold}) based on accumulated evidence
+- **NOT near bright stars** or showing erratic behavior
+
+**Remember: Most detections are artifacts. Be skeptical. When uncertain, observe_again.**
 
 ### `wait`
 Skip this observation. Use when:
@@ -183,6 +239,35 @@ Skip this observation. Use when:
 - **BRIGHTENING**: 3+ detections with clear brightening pattern → ready for alert
 - **ALERTED**: Alert has been triggered for this candidate
 - **REJECTED**: Determined to be artifact, cosmic ray, or non-variable
+
+## When to REJECT Candidates (Critical!)
+You operate in a noisy environment. Most detections are FALSE POSITIVES. Reject candidates that show:
+- **No brightening over 3+ observations** - Real transients brighten!
+- **Inconsistent positions** - Jumps around = artifact
+- **Near bright stars** - Likely subtraction artifacts
+- **Stable or fading immediately** - Not a rising transient
+
+**Be SKEPTICAL by default. Only alert on candidates with CLEAR, CONSISTENT brightening over 3+ observations.**
+
+## Positional Stability Requirement (Critical Scientific Constraint)
+
+**Astronomical transients are FIXED on the sky.** A real source will appear at the **same pixel coordinates** in every observation.
+
+Before confirming a candidate, you MUST evaluate positional stability across detections:
+- Real transients: Position stable within ~2-3 pixels across all observations
+- Artifacts/noise: Position shifts >3 pixels between observations
+- **If position jumps around, it's NOT a real transient** - reject or keep monitoring
+
+**Brightness evolution alone is NOT sufficient evidence for confirmation.**
+
+Alert can ONLY be triggered when BOTH conditions are satisfied:
+1. ✅ At least 3 detections with consistent brightening
+2. ✅ Stable position across observations (within 2-3 pixels)
+
+**Example**: 
+- CAND_01 at (512, 340) in all 5 observations → Position stable ✅
+- CAND_02 at (100, 200) → (105, 198) → (102, 201) → Position stable ✅ (within 3 pixels)
+- CAND_03 at (300, 400) → (315, 410) → (290, 395) → Position unstable ❌ (jumps >10 pixels) → REJECT
 
 ## Transient Classification Guidelines
 - **Type Ia Supernova**: Rapid rise (days), peak mag ~-19, slow decline
@@ -235,9 +320,26 @@ def format_candidates_table(candidates: List[Candidate]) -> str:
     return "\n".join(lines)
 
 
-def build_context_prompt(context: ContextState) -> str:
-    """Build the context portion of the prompt from current state."""
+def build_context_prompt(context: ContextState, detected_sources: Optional[List] = None) -> str:
+    """Build the context portion of the prompt from current state.
+    
+    Args:
+        context: Current agent state
+        detected_sources: Optional list of newly detected sources from differencer
+                         Each source should have: x, y, magnitude, significance
+    """
     candidates_table = format_candidates_table(context.candidates)
+    
+    # Build detected sources table if provided
+    detected_sources_section = ""
+    if detected_sources:
+        detected_sources_section = "\n### Newly Detected Sources (from Differencer)\n"
+        detected_sources_section += "| Position | Magnitude | Significance |\n"
+        detected_sources_section += "|----------|-----------|-------------|\n"
+        for src in detected_sources:
+            mag_str = f"{src.magnitude:.2f}" if hasattr(src, 'magnitude') and src.magnitude < 90 else "N/A"
+            detected_sources_section += f"| ({src.x}, {src.y}) | {mag_str} | {src.significance:.1f}σ |\n"
+        detected_sources_section += "\n**Note:** Use these measured magnitudes when creating/updating candidates.\n"
     
     return f"""## Current Session Status
 
@@ -252,7 +354,7 @@ def build_context_prompt(context: ContextState) -> str:
 
 ### Tracked Candidates ({len(context.candidates)} total)
 {candidates_table}
-
+{detected_sources_section}
 ### Session Statistics
 - Total Observations: {context.total_observations}
 - Alerts Triggered: {context.alerts_triggered}
@@ -265,6 +367,7 @@ def build_context_prompt(context: ContextState) -> str:
 ## Task
 Analyze the three provided images (Reference, Current, Difference).
 Compare the candidate list with visible detections in the difference image.
+Use the measured magnitudes from the Detected Sources table when updating candidate history.
 Output your decision as a JSON object matching the AgentDecision schema.
 
 ### AgentDecision Schema
@@ -304,7 +407,7 @@ FEW_SHOT_EXAMPLES = """
 ## Example Responses
 
 ### Example 1: New Detection
-Input: First observation, one bright region detected in difference image
+Input: First observation, one bright region detected in difference image at (512, 340) with magnitude 18.5
 ```json
 {
   "action": "observe_again",
@@ -332,7 +435,7 @@ Input: First observation, one bright region detected in difference image
 ```
 
 ### Example 2: Brightening Candidate - Trigger Alert
-Input: Third observation of CAND_01, showing continued brightening
+Input: Third observation of CAND_01, showing continued brightening (18.5 → 17.2 → 16.0)
 ```json
 {
   "action": "trigger_alert",

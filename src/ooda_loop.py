@@ -52,6 +52,7 @@ from src.agent import (
 from src.simulation.ground_truth import GroundTruthTracker, TransientType as GTTransientType
 from src.agent.memory_manager import MemoryManager, MemoryConfig
 from src.agent.decision_log import DecisionLogger
+from src.utils.debug_logger import initialize_debug_logger, get_debug_logger, finalize_debug_logger
 
 
 class LoopState(Enum):
@@ -174,6 +175,7 @@ class OODALoop:
         self._ground_truth: Optional[GroundTruthTracker] = None
         self._memory_manager: Optional[MemoryManager] = None
         self._decision_logger: Optional[DecisionLogger] = None
+        self._debug_logger = None  # Will be initialized in initialize()
         
         logger.info("OODALoop initialized with config:")
         logger.info(f"  - Max iterations: {self.config.max_iterations}")
@@ -195,6 +197,11 @@ class OODALoop:
         logger.info("=" * 60)
         
         try:
+            # 0. Initialize Debug Logger
+            logger.info("0. Initializing Debug Logger...")
+            self._debug_logger = initialize_debug_logger()
+            logger.info(f"   ✓ Debug logger ready: {self._debug_logger.session_id}")
+            
             # 1. Initialize Universe
             logger.info("1. Initializing UniverseController...")
             self._universe = UniverseController(
@@ -233,8 +240,8 @@ class OODALoop:
             # 4. Initialize Image Differencer
             logger.info("4. Initializing ImageDifferencer...")
             self._differencer = ImageDifferencer(
-                sigma_threshold=4.0,  # Detection threshold
-                min_area=4,
+                sigma_threshold=3.5,  # Lowered from 4.0 for better sensitivity
+                min_area=3,           # Lowered from 4 to detect smaller sources
                 max_candidates=50
             )
             logger.info("   ✓ Differencer configured")
@@ -397,6 +404,22 @@ class OODALoop:
                 event_type=event_type
             )
             
+            # Log injection for debugging
+            if self._debug_logger:
+                pixel_scale = self.config.field_size / 1024.0
+                expected_px = int((x / pixel_scale) + 512)
+                expected_py = int((y / pixel_scale) + 512)
+                self._debug_logger.log_transient_injection(
+                    transient_id=f"TRANS_{i+1:02d}",
+                    event_type=event_type.value,
+                    sky_coords=(x, y),
+                    pixel_coords=(expected_px, expected_py),
+                    peak_magnitude=peak_mag,
+                    start_time=self._universe.current_time.isoformat(),
+                    duration_hours=duration,
+                    is_real=True
+                )
+            
             logger.info(f"   - Transient {i+1}: {event_type.value} at ({x:.2f}, {y:.2f}), "
                        f"peak mag={peak_mag:.1f}, starts in {start_offset:.1f}h")
 
@@ -501,9 +524,22 @@ class OODALoop:
             logger.info(f"   Detected {num_detections} candidate regions")
             
             # Debug: Log detected candidate positions vs ground truth
-            for cand in diff_result.candidate_regions[:5]:  # First 5
+            for idx, cand in enumerate(diff_result.candidate_regions[:5]):  # First 5
                 sky_x, sky_y = self._pixel_to_sky(cand.x, cand.y)
-                logger.debug(f"   Differencer candidate: pixel ({cand.x}, {cand.y}) -> sky ({sky_x:.3f}, {sky_y:.3f}) arcsec, sig={cand.significance:.1f}σ")
+                mag_str = f"{cand.magnitude:.2f}" if hasattr(cand, 'magnitude') and cand.magnitude < 90 else "N/A"
+                logger.debug(f"   Differencer candidate: pixel ({cand.x}, {cand.y}) -> sky ({sky_x:.3f}, {sky_y:.3f}) arcsec, sig={cand.significance:.1f}σ, mag={mag_str}")
+                
+                # Log to debug logger
+                if self._debug_logger:
+                    self._debug_logger.log_detection(
+                        iteration=self.iteration,
+                        candidate_id=f"DET_{idx+1:02d}",
+                        pixel_coords=(cand.x, cand.y),
+                        sky_coords=(sky_x, sky_y),
+                        flux=cand.flux,
+                        magnitude=cand.magnitude if hasattr(cand, 'magnitude') else 99.0,
+                        significance=cand.significance
+                    )
             
             # Save observation and diff
             obs_path = Path(self.config.observation_dir) / f"iteration_{self.iteration:03d}"
@@ -530,12 +566,13 @@ class OODALoop:
                 total_observations=self._context.total_observations
             )
             
-            # Call agent
+            # Call agent with detected sources
             decision = self._agent.analyze_images(
                 reference=self.reference_image,
                 current=current_image,
                 diff_annotated=diff_result.annotated_image,
-                context=self._context
+                context=self._context,
+                detected_sources=diff_result.candidate_regions  # Pass detected sources with magnitudes
             )
             
             logger.info(f"   Decision: {decision.action} (confidence: {decision.confidence:.2f})")
@@ -805,6 +842,22 @@ class OODALoop:
                 if final_metrics.mean_latency_hours > 0:
                     logger.info(f"  Mean Alert Latency: {final_metrics.mean_latency_hours:.2f} hours")
                 logger.info("=" * 70)
+                
+                # Log summary to debug logger
+                if self._debug_logger:
+                    total_transients = sum(1 for e in self._ground_truth.events.values() if e.is_real_transient)
+                    self._debug_logger.log_summary(
+                        total_iterations=len(iterations),
+                        total_transients=total_transients,
+                        total_detections=sum(1 for r in iterations if r.num_detections > 0),
+                        total_alerts=total_alerts,
+                        true_positives=final_metrics.true_positives,
+                        false_positives=final_metrics.false_positives,
+                        false_negatives=final_metrics.false_negatives,
+                        precision=final_metrics.precision,
+                        recall=final_metrics.recall,
+                        f1_score=final_metrics.f1_score
+                    )
 
             marathon_result = MarathonResult(
                 start_time=start_time,
@@ -826,6 +879,15 @@ class OODALoop:
             logger.info("\n⚠️ Marathon interrupted by user")
             self.state = LoopState.STOPPED
             raise
+        finally:
+            # Always finalize debug logger, even on error/interrupt
+            if self._debug_logger:
+                try:
+                    log_file = finalize_debug_logger()
+                    if log_file:
+                        logger.info(f"📊 Debug logs saved to: {log_file}")
+                except Exception as e:
+                    logger.error(f"Failed to finalize debug logger: {e}")
     
     def _print_marathon_summary(self, result: MarathonResult):
         """Print a summary of the marathon run."""

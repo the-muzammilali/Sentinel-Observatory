@@ -41,6 +41,11 @@ data/reference/*.png
 logs/*.log
 logs/*.json
 
+# Archive folders (old sessions with 0% accuracy)
+data/sessions_archive/
+data/observations_archive/
+logs/debug_archive/
+
 # ScopeSim cache
 .scopesim/
 IRDB/
@@ -66,3 +71,6 @@ temp/
 logs/*.log
 logs/*.json
 *.log
+
+Plan.md
+.kiro

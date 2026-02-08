@@ -145,6 +145,12 @@ class Candidate(BaseModel):
         try:
             last_dt = datetime.fromisoformat(self.last_confidence_update)
             curr_dt = datetime.fromisoformat(current_time)
+            # Ensure timezone-aware for comparison
+            from datetime import timezone
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if curr_dt.tzinfo is None:
+                curr_dt = curr_dt.replace(tzinfo=timezone.utc)
             hours = (curr_dt - last_dt).total_seconds() / 3600
         except (ValueError, TypeError):
             return self.confidence

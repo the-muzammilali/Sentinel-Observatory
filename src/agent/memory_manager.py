@@ -263,6 +263,12 @@ class MemoryManager:
         current_time: datetime
     ) -> List[Any]:
         """Apply confidence decay to stale candidates."""
+        from datetime import timezone
+        
+        # Ensure current_time is timezone-aware for comparison
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        
         threshold = timedelta(hours=self.config.stale_threshold_hours)
         
         for candidate in candidates:
@@ -284,6 +290,12 @@ class MemoryManager:
         current_time: datetime
     ) -> Tuple[List[Any], List[CandidateSummary]]:
         """Archive confirmed candidates past threshold."""
+        from datetime import timezone
+        
+        # Ensure current_time is timezone-aware
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        
         threshold = timedelta(hours=self.config.archive_confirmed_after_hours)
         
         active = []
@@ -306,6 +318,12 @@ class MemoryManager:
         current_time: datetime
     ) -> Tuple[List[Any], List[CandidateSummary]]:
         """Archive rejected candidates past threshold."""
+        from datetime import timezone
+        
+        # Ensure current_time is timezone-aware
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        
         threshold = timedelta(hours=self.config.prune_rejected_after_hours)
         
         active = []
@@ -328,6 +346,12 @@ class MemoryManager:
         current_time: datetime
     ) -> Tuple[List[CandidateSummary], int]:
         """Remove archived summaries past retention period."""
+        from datetime import timezone
+        
+        # Ensure current_time is timezone-aware
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        
         threshold = timedelta(days=self.config.prune_archived_after_days)
         
         kept = []
@@ -335,6 +359,9 @@ class MemoryManager:
         
         for summary in archived:
             archived_time = datetime.fromisoformat(summary.archived_at)
+            # Ensure timezone-aware for comparison
+            if archived_time.tzinfo is None:
+                archived_time = archived_time.replace(tzinfo=timezone.utc)
             if (current_time - archived_time) <= threshold:
                 kept.append(summary)
             else:
@@ -421,6 +448,12 @@ class MemoryManager:
             try:
                 t1 = datetime.fromisoformat(str(first_seen))
                 t2 = datetime.fromisoformat(str(last_seen))
+                # Ensure timezone-aware for comparison
+                from datetime import timezone
+                if t1.tzinfo is None:
+                    t1 = t1.replace(tzinfo=timezone.utc)
+                if t2.tzinfo is None:
+                    t2 = t2.replace(tzinfo=timezone.utc)
                 duration_hours = (t2 - t1).total_seconds() / 3600
             except (ValueError, TypeError):
                 pass
@@ -513,7 +546,12 @@ class MemoryManager:
         
         if time_str:
             try:
-                return datetime.fromisoformat(str(time_str))
+                dt = datetime.fromisoformat(str(time_str))
+                # Ensure timezone-aware datetime for comparison
+                if dt.tzinfo is None:
+                    from datetime import timezone
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
             except (ValueError, TypeError):
                 pass
         

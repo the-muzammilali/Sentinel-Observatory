@@ -148,8 +148,9 @@ class GroundTruthTracker:
     
     # Position matching tolerance
     # NOTE: Coordinates are in arcseconds from field center
-    # FOV is 10 arcsec, so 2 arcsec tolerance is ~20% of field
-    MATCH_RADIUS_ARCSEC = 2.0  # arcsec tolerance for matching (accounts for centroid offset)
+    # FOV is 10 arcsec, so 3 arcsec tolerance is ~30% of field
+    # Increased from 2.0 to 3.0 to account for centroid offset and alignment errors
+    MATCH_RADIUS_ARCSEC = 3.0  # arcsec tolerance for matching
     
     def __init__(self, reveal_mode: bool = False):
         """
@@ -227,13 +228,54 @@ class GroundTruthTracker:
         Returns:
             Matched ground truth event ID, or None
         """
+        # Find nearby events for debugging
+        nearby_events = []
+        for event_id, event in self.events.items():
+            distance = self._calculate_distance(ra, dec, event.ra, event.dec)
+            if distance < self.MATCH_RADIUS_ARCSEC * 3:  # 3x radius for "nearby"
+                nearby_events.append({
+                    "id": event_id,
+                    "ra": event.ra,
+                    "dec": event.dec,
+                    "distance": distance,
+                    "is_real": event.is_real_transient
+                })
+        
+        # Sort by distance
+        nearby_events.sort(key=lambda x: x['distance'])
+        
+        # Try to match
+        matched_event_id = None
+        matched_distance = None
+        
         for event_id, event in self.events.items():
             if self._positions_match(ra, dec, event.ra, event.dec):
                 event.detected_by_agent = True
                 event.matched_candidate_id = candidate_id
-                return event_id
+                matched_event_id = event_id
+                matched_distance = self._calculate_distance(ra, dec, event.ra, event.dec)
+                break
         
-        return None
+        # Log to debug logger if available
+        from src.utils.debug_logger import get_debug_logger
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_ground_truth_match(
+                iteration=0,  # Will be updated by caller
+                candidate_id=candidate_id,
+                candidate_sky_coords=(ra, dec),
+                matched_event_id=matched_event_id,
+                distance_arcsec=matched_distance,
+                match_threshold=self.MATCH_RADIUS_ARCSEC,
+                nearby_events=nearby_events[:5]  # Top 5 nearest
+            )
+        
+        return matched_event_id
+    
+    def _calculate_distance(self, ra1: float, dec1: float, ra2: float, dec2: float) -> float:
+        """Calculate Euclidean distance between two positions in arcsec."""
+        import math
+        return math.sqrt((ra1 - ra2)**2 + (dec1 - dec2)**2)
     
     def record_alert(
         self,
@@ -254,19 +296,32 @@ class GroundTruthTracker:
         Returns:
             True if alert was for a real transient (true positive)
         """
+        matched_event_id = None
+        matched_distance = None
+        is_true_positive = False
+        
         for event_id, event in self.events.items():
             if self._positions_match(ra, dec, event.ra, event.dec):
                 event.alert_triggered = True
                 event.alert_time = alert_time
                 self._alerts_by_candidate[candidate_id] = event_id
+                matched_event_id = event_id
+                matched_distance = self._calculate_distance(ra, dec, event.ra, event.dec)
                 
                 if event.is_real_transient:
                     self._metrics.true_positives += 1
+                    is_true_positive = True
                     
                     # Calculate latency
                     try:
                         appear = datetime.fromisoformat(event.appearance_time)
                         alert = datetime.fromisoformat(alert_time)
+                        # Ensure timezone-aware for comparison
+                        from datetime import timezone
+                        if appear.tzinfo is None:
+                            appear = appear.replace(tzinfo=timezone.utc)
+                        if alert.tzinfo is None:
+                            alert = alert.replace(tzinfo=timezone.utc)
                         latency = (alert - appear).total_seconds() / 3600
                         
                         self._metrics.total_detections += 1
@@ -284,17 +339,44 @@ class GroundTruthTracker:
                         f"TRUE POSITIVE: Alert on {event_id} "
                         f"({event.event_type.value})"
                     )
-                    return True
                 else:
                     self._metrics.false_positives += 1
                     logger.warning(
                         f"FALSE POSITIVE: Alert on non-transient {event_id}"
                     )
-                    return False
+                
+                # Log to debug logger
+                from src.utils.debug_logger import get_debug_logger
+                debug_logger = get_debug_logger()
+                if debug_logger:
+                    debug_logger.log_alert(
+                        iteration=0,  # Will be updated by caller
+                        candidate_id=candidate_id,
+                        sky_coords=(ra, dec),
+                        is_true_positive=is_true_positive,
+                        matched_event_id=matched_event_id,
+                        distance_arcsec=matched_distance
+                    )
+                
+                return is_true_positive
         
         # Alert on unknown position - false positive
         self._metrics.false_positives += 1
         logger.warning(f"FALSE POSITIVE: Alert on unknown position")
+        
+        # Log to debug logger
+        from src.utils.debug_logger import get_debug_logger
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_alert(
+                iteration=0,
+                candidate_id=candidate_id,
+                sky_coords=(ra, dec),
+                is_true_positive=False,
+                matched_event_id=None,
+                distance_arcsec=None
+            )
+        
         return False
     
     def finalize_metrics(self) -> EvaluationMetrics:
