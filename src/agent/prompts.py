@@ -54,18 +54,48 @@ You will receive THREE images each iteration:
 3. **Difference Image (Annotated)**: Subtraction result with candidate regions circled in red
 
 ## Your Task Each Iteration
-1. Examine ALL circled regions in the difference image
-2. Compare each region against the reference to determine if it's a real change
-3. For EXISTING candidates (from ContextState): Check if they're still visible and track evolution
+1. **CHECK FIRST**: Is the "Newly Detected Sources" table present and non-empty?
+   - **If NO or EMPTY**: You MUST follow the Guard Condition below
+   - **If YES**: Proceed with analysis
+
+2. Examine ALL circled regions in the difference image
+3. Compare each region against the reference to determine if it's a real change
+4. For EXISTING candidates (from ContextState): Check if they're still visible and track evolution
    - **CRITICAL**: Match existing candidates to newly detected sources by position
    - If a candidate appears in "Newly Detected Sources" within ~5 pixels of its tracked position, UPDATE its position to the new measurement
    - **COPY the magnitude value** from "Newly Detected Sources" into the candidate's history entry
    - If a candidate does NOT appear in newly detected sources, note "not detected this iteration" in history
-4. For NEW detections: Create new candidate entries with status "NEW"
+5. For NEW detections: Create new candidate entries with status "NEW"
    - **COPY the magnitude value** from "Newly Detected Sources" into the first history entry
-5. Decide the best next action
+6. Decide the best next action
 
 **IMPORTANT**: Every history entry MUST include the magnitude value from the "Newly Detected Sources" table. This is critical for tracking brightness evolution!
+
+## 🚫 GUARD CONDITION — NO DETECTION HANDLING 🚫
+
+**If the "Newly Detected Sources" table is EMPTY or MISSING:**
+
+You MUST assume that **no measurable astronomical candidates were detected** in this observation.
+
+**YOU ARE NOT ALLOWED TO:**
+- Visually infer or estimate candidates from the difference image alone
+- Create new candidates without measured data
+- Assign coordinates to unmeasured sources
+- Estimate brightness or magnitude values
+- Trigger alerts based on visual inspection
+
+**WHY:** The difference image may contain noise, subtraction residuals, or artifacts that are NOT real sources. Without measured photometry from the detection pipeline, you cannot distinguish signal from noise.
+
+**REQUIRED ACTION WHEN NO DETECTIONS:**
+- Action: `observe_again`
+- Do NOT create new candidates
+- Do NOT update existing candidates (they remain in their current state)
+- Reasoning: State that observing conditions or signal strength were insufficient for reliable detection
+- Note that additional observations are required
+
+**YOU MAY ONLY analyze, track, or classify candidates that appear in the "Newly Detected Sources" table with measured magnitudes.**
+
+This is how real astronomers work - they rely on measured data from detection pipelines, not visual guesses from difference images.
 
 ## Decision Actions
 
@@ -216,6 +246,32 @@ observations periodically. Your job is to:
 - This is CRITICAL for tracking brightness evolution and light curves
 - Without magnitudes, the system cannot function properly
 
+## 🚫 GUARD CONDITION — NO DETECTION HANDLING 🚫
+
+**CRITICAL: If the "Newly Detected Sources" table is EMPTY or MISSING:**
+
+You MUST assume that **no measurable astronomical candidates were detected** in this observation.
+
+**YOU ARE NOT ALLOWED TO:**
+- Visually infer or estimate candidates from the difference image alone
+- Create new candidates without measured data
+- Assign coordinates to unmeasured sources
+- Estimate brightness or magnitude values
+- Trigger alerts based on visual inspection
+
+**WHY:** The difference image may contain noise, subtraction residuals, or artifacts that are NOT real sources. Without measured photometry from the detection pipeline, you cannot distinguish signal from noise.
+
+**REQUIRED ACTION WHEN NO DETECTIONS:**
+- Action: `observe_again`
+- Do NOT create new candidates
+- Do NOT update existing candidates (they remain in their current state)
+- Reasoning: State that observing conditions or signal strength were insufficient for reliable detection
+- Note that additional observations are required
+
+**YOU MAY ONLY analyze, track, or classify candidates that appear in the "Newly Detected Sources" table with measured magnitudes.**
+
+This is how real astronomers work - they rely on measured data from detection pipelines, not visual guesses from difference images.
+
 ## CRITICAL: Long-Context Memory
 You have access to the FULL CONVERSATION HISTORY. Use this capability:
 - Reference past observations: "In observation 5, I first detected this source..."
@@ -243,15 +299,19 @@ You will receive THREE images:
 3. **Difference Image (Annotated)**: Subtraction result with candidates circled in red
 
 ## Your Task Each Observation
-1. Examine ALL circled regions in the difference image
-2. Compare each region against the reference to determine if it's a real change
-3. For EXISTING candidates: Check if still visible, track evolution, UPDATE your mental model
+1. **CHECK FIRST**: Is the "Newly Detected Sources" table present and non-empty?
+   - **If NO or EMPTY**: Follow the Guard Condition above (observe_again, no new candidates)
+   - **If YES**: Proceed with analysis below
+
+2. Examine ALL circled regions in the difference image
+3. Compare each region against the reference to determine if it's a real change
+4. For EXISTING candidates: Check if still visible, track evolution, UPDATE your mental model
    - **CRITICAL**: Match existing candidates to newly detected sources by position
    - If a candidate appears in "Newly Detected Sources" within ~5 pixels of its tracked position, UPDATE its position to the new measurement
    - **COPY the magnitude value** from "Newly Detected Sources" into the candidate's history entry
    - Track position changes: if position shifts >3 pixels, note this as potential artifact
    - If a candidate does NOT appear in newly detected sources, note "not detected this iteration" in history
-4. For NEW detections: Create new candidate entries with status "NEW"
+5. For NEW detections: Create new candidate entries with status "NEW"
    - **COPY the magnitude value** from "Newly Detected Sources" into the first history entry
 5. Decide the best next action based on accumulated evidence
 
@@ -425,9 +485,9 @@ def build_context_prompt(context: ContextState, detected_sources: Optional[List]
     """
     candidates_table = format_candidates_table(context.candidates)
     
-    # Build detected sources table if provided
+    # Build detected sources table if provided AND non-empty
     detected_sources_section = ""
-    if detected_sources:
+    if detected_sources and len(detected_sources) > 0:
         detected_sources_section = "\n### Newly Detected Sources (from Differencer)\n"
         detected_sources_section += "| Position | Magnitude | Significance |\n"
         detected_sources_section += "|----------|-----------|-------------|\n"
@@ -435,6 +495,9 @@ def build_context_prompt(context: ContextState, detected_sources: Optional[List]
             mag_str = f"{src.magnitude:.2f}" if hasattr(src, 'magnitude') and src.magnitude < 90 else "N/A"
             detected_sources_section += f"| ({src.x}, {src.y}) | {mag_str} | {src.significance:.1f}σ |\n"
         detected_sources_section += "\n**Note:** Use these measured magnitudes when creating/updating candidates.\n"
+    else:
+        # No detections - add explicit note
+        detected_sources_section = "\n### Newly Detected Sources (from Differencer)\n**NO SOURCES DETECTED** - Detection pipeline found no candidates above threshold.\n\n⚠️ **GUARD CONDITION ACTIVE**: You must NOT create new candidates. Follow the Guard Condition rules.\n"
     
     return f"""## Current Session Status
 

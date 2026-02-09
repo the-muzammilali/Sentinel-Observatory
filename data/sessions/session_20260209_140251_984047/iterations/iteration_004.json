@@ -1,0 +1,50 @@
+{
+  "iteration": 4,
+  "timestamp": "2026-02-09T14:05:41.095696",
+  "simulated_time": "2026-02-09T16:03:01.658562",
+  "weather": {
+    "seeing": 1.054418284446001,
+    "cloud_extinction": 0.2,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 911,
+      "y": 517,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 3,
+      "hypothesis": "Rapidly brightening transient (Nova or early SN)",
+      "history": [
+        {
+          "time": "2026-02-09T14:03:01.658562",
+          "magnitude": 12.5,
+          "confidence": 0.9,
+          "note": "Initial detection at high significance."
+        },
+        {
+          "time": "2026-02-09T14:33:01.658562",
+          "magnitude": 11.22,
+          "confidence": 0.95,
+          "note": "Significant brightening (1.28 mag). Position stable."
+        },
+        {
+          "time": "2026-02-09T15:03:01.658562",
+          "magnitude": 10.12,
+          "confidence": 0.99,
+          "note": "Continued consistent brightening (1.10 mag). Position stable. Alert criteria met."
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "CAND_01 continues its rapid brightening trend, reaching magnitude 9.50. Three other faint detections appeared within 10 pixels of the primary source; these are rejected as PSF artifacts or subtraction residuals caused by the extreme brightness (280.2\u03c3) of CAND_01.",
+    "confidence": 0.99
+  },
+  "num_detections": 4,
+  "alerts_triggered": 1,
+  "ground_truth": null,
+  "image_filename": "iteration_004.png"
+}

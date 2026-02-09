@@ -1,0 +1,50 @@
+{
+  "iteration": 8,
+  "timestamp": "2026-02-09T14:09:15.534899",
+  "simulated_time": "2026-02-09T18:03:01.658562",
+  "weather": {
+    "seeing": 1.0101485718041658,
+    "cloud_extinction": 0.2,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 911,
+      "y": 517,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 3,
+      "hypothesis": "Rapidly brightening transient (Nova or early SN)",
+      "history": [
+        {
+          "time": "2026-02-09T14:03:01.658562",
+          "magnitude": 12.5,
+          "confidence": 0.9,
+          "note": "Initial detection at high significance."
+        },
+        {
+          "time": "2026-02-09T14:33:01.658562",
+          "magnitude": 11.22,
+          "confidence": 0.95,
+          "note": "Significant brightening (1.28 mag). Position stable."
+        },
+        {
+          "time": "2026-02-09T15:03:01.658562",
+          "magnitude": 10.12,
+          "confidence": 0.99,
+          "note": "Continued consistent brightening (1.10 mag). Position stable. Alert criteria met."
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "CAND_01 has begun to fade (8.63 -> 8.75), indicating it has passed its peak brightness. The 16 additional detections in this iteration are clustered within 15 pixels of the primary source and are rejected as PSF artifacts and subtraction residuals caused by the extreme brightness of the transient.",
+    "confidence": 1.0
+  },
+  "num_detections": 17,
+  "alerts_triggered": 1,
+  "ground_truth": null,
+  "image_filename": "iteration_008.png"
+}
