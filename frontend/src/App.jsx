@@ -2,12 +2,20 @@ import { useState, useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Header from './components/Layout/Header'
 import Sidebar from './components/Layout/Sidebar'
+import Login from './components/Login/Login'
 import Dashboard from './pages/Dashboard'
 import Playback from './pages/Playback'
 import Settings from './pages/Settings'
 import './App.css'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authToken, setAuthToken] = useState(null)
+  const [username, setUsername] = useState(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
   const [marathonState, setMarathonState] = useState({
     isRunning: false,
     isPaused: false,
@@ -21,6 +29,57 @@ function App() {
   const [wsConnected, setWsConnected] = useState(false)
   // Key that increments on each new marathon to force child components to remount fresh
   const [marathonResetKey, setMarathonResetKey] = useState(0)
+
+  // Check for existing auth token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token')
+    const storedUsername = localStorage.getItem('username')
+    
+    if (token) {
+      // Verify token is still valid
+      fetch(`${API_BASE_URL}/api/auth/verify`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.authenticated) {
+            setAuthToken(token)
+            setUsername(storedUsername || data.username)
+            setIsAuthenticated(true)
+          } else {
+            // Token invalid, clear it
+            localStorage.removeItem('auth_token')
+            localStorage.removeItem('username')
+          }
+        })
+        .catch(() => {
+          // Token verification failed, clear it
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('username')
+        })
+        .finally(() => {
+          setIsCheckingAuth(false)
+        })
+    } else {
+      setIsCheckingAuth(false)
+    }
+  }, [])
+
+  const handleLoginSuccess = (token, user) => {
+    setAuthToken(token)
+    setUsername(user)
+    setIsAuthenticated(true)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('username')
+    setAuthToken(null)
+    setUsername(null)
+    setIsAuthenticated(false)
+  }
 
   // Message handler for WebSocket
   const handleWsMessage = useCallback((data) => {
@@ -64,6 +123,8 @@ function App() {
 
   // WebSocket connection for real-time updates
   useEffect(() => {
+    if (!isAuthenticated) return
+
     let ws = null
     let reconnectTimeout = null
     let isCleanup = false
@@ -74,7 +135,12 @@ function App() {
       if (isCleanup) return
 
       try {
-        ws = new WebSocket('ws://localhost:8000/ws/marathon')
+        // Determine WebSocket protocol and host
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const apiUrl = API_BASE_URL.replace('https://', '').replace('http://', '')
+        const wsUrl = `${wsProtocol}//${apiUrl}/ws/marathon?token=${authToken}`
+        
+        ws = new WebSocket(wsUrl)
 
         ws.onopen = () => {
           if (!isCleanup) {
@@ -133,7 +199,7 @@ function App() {
         ws.close(1000, 'Component unmounting')
       }
     }
-  }, [handleWsMessage])
+  }, [handleWsMessage, isAuthenticated, authToken])
 
   const handleStartMarathon = async (config) => {
     // Clear all state for a fresh marathon start
@@ -147,9 +213,12 @@ function App() {
     }))
 
     try {
-      const response = await fetch('http://localhost:8000/api/marathon/start', {
+      const response = await fetch(`${API_BASE_URL}/api/marathon/start`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
         body: JSON.stringify(config),
       })
       const data = await response.json()
@@ -170,7 +239,12 @@ function App() {
 
   const handleStopMarathon = async () => {
     try {
-      await fetch('http://localhost:8000/api/marathon/stop', { method: 'POST' })
+      await fetch(`${API_BASE_URL}/api/marathon/stop`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      })
       setMarathonState(prev => ({
         ...prev,
         isRunning: false,
@@ -183,7 +257,12 @@ function App() {
 
   const handlePauseMarathon = async () => {
     try {
-      await fetch('http://localhost:8000/api/marathon/pause', { method: 'POST' })
+      await fetch(`${API_BASE_URL}/api/marathon/pause`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      })
       setMarathonState(prev => ({
         ...prev,
         isPaused: !prev.isPaused,
@@ -194,12 +273,35 @@ function App() {
     }
   }
 
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%)',
+        color: '#fff'
+      }}>
+        <div>Loading...</div>
+      </div>
+    )
+  }
+
+  // Show login if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} />
+  }
+
   return (
     <BrowserRouter>
       <div className="app">
         <Header
           marathonState={marathonState}
           wsConnected={wsConnected}
+          username={username}
+          onLogout={handleLogout}
         />
         <div className="app-content">
           <Sidebar

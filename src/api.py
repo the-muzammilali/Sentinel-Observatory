@@ -3,6 +3,7 @@ Sentinel Observatory - FastAPI Backend
 Real-time API layer with WebSocket and SSE for frontend dashboard.
 """
 
+import os
 import asyncio
 import json
 import logging
@@ -12,12 +13,21 @@ from pathlib import Path
 from typing import Optional, AsyncGenerator
 import base64
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 
 from src.utils.session_recorder import SessionRecorder
+from src.auth import (
+    verify_auth_token, 
+    verify_credentials, 
+    create_session, 
+    cleanup_expired_sessions,
+    LoginRequest,
+    LoginResponse,
+    get_session_info
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +53,36 @@ class MarathonState:
         self._log_queue: asyncio.Queue = asyncio.Queue()
         self._stop_requested = False
         self._log_history: list[dict] = []  # Store logs for retrieval on refresh
+        self._max_log_history = 1000  # Limit log history to prevent memory issues
+    
+    def add_log(self, log_entry: dict):
+        """Add log entry with size limit."""
+        self._log_history.append(log_entry)
+        # Keep only last N entries to prevent unbounded growth
+        if len(self._log_history) > self._max_log_history:
+            self._log_history = self._log_history[-self._max_log_history:]
+    
+    def cleanup(self):
+        """Clean up resources."""
+        # Clean up OODA loop
+        if self.ooda_loop:
+            try:
+                self.ooda_loop.cleanup()
+            except Exception as e:
+                logger.error(f"Error cleaning up OODA loop: {e}")
+            self.ooda_loop = None
+        
+        # Clear state
+        self.context_state = None
+        self._log_history = []
+        
+        # Close WebSocket connections
+        for ws in self._websocket_clients[:]:
+            try:
+                asyncio.create_task(ws.close())
+            except Exception:
+                pass
+        self._websocket_clients = []
     
     def to_dict(self):
         return {
@@ -85,14 +125,26 @@ class StatusResponse(BaseModel):
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("🔭 Sentinel Observatory API starting...")
+    
+    # Cleanup expired sessions periodically
+    async def cleanup_task():
+        while True:
+            await asyncio.sleep(3600)  # Every hour
+            cleanup_expired_sessions()
+    
+    cleanup_task_handle = asyncio.create_task(cleanup_task())
+    
     yield
+    
     logger.info("🔭 Sentinel Observatory API shutting down...")
-    # Clean up WebSocket connections
-    for ws in marathon_state._websocket_clients[:]:
-        try:
-            await ws.close()
-        except Exception:
-            pass
+    
+    # Cancel cleanup task
+    cleanup_task_handle.cancel()
+    
+    # Clean up marathon state
+    marathon_state.cleanup()
+    
+    logger.info("✓ Cleanup complete")
 
 # ============================================================================
 # FASTAPI APP
@@ -106,20 +158,62 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend
+# In production, replace with your actual frontend domain
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:3000"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    """Login endpoint - returns session token."""
+    if not verify_credentials(request.username, request.password):
+        return LoginResponse(
+            success=False,
+            message="Invalid username or password"
+        )
+    
+    # Create session
+    token = create_session(request.username)
+    
+    return LoginResponse(
+        success=True,
+        token=token,
+        message="Login successful"
+    )
+
+
+@app.post("/api/auth/logout")
+async def logout(username: str = Depends(verify_auth_token)):
+    """Logout endpoint - invalidates session token."""
+    # Token is already verified by dependency
+    return {"success": True, "message": "Logged out successfully"}
+
+
+@app.get("/api/auth/verify")
+async def verify_auth(username: str = Depends(verify_auth_token)):
+    """Verify if current token is valid."""
+    return {"authenticated": True, "username": username}
+
+
+# ============================================================================
 # MARATHON CONTROL ENDPOINTS
 # ============================================================================
 
 @app.post("/api/marathon/start", response_model=StatusResponse)
-async def start_marathon(config: MarathonConfig):
+async def start_marathon(config: MarathonConfig, username: str = Depends(verify_auth_token)):
     """Start a new observation marathon."""
     if marathon_state.is_running:
         raise HTTPException(status_code=400, detail="Marathon already running")
@@ -163,7 +257,7 @@ async def start_marathon(config: MarathonConfig):
     )
 
 @app.post("/api/marathon/stop", response_model=StatusResponse)
-async def stop_marathon():
+async def stop_marathon(username: str = Depends(verify_auth_token)):
     """Stop the current marathon."""
     if not marathon_state.is_running:
         raise HTTPException(status_code=400, detail="No marathon running")
@@ -171,16 +265,17 @@ async def stop_marathon():
     marathon_state._stop_requested = True
     marathon_state.is_running = False
     marathon_state.status = "idle"
-    marathon_state.context_state = None  # Clear old data so fresh start shows empty state
     marathon_state.current_iteration = 0
-    marathon_state.ooda_loop = None
+    
+    # Clean up resources
+    marathon_state.cleanup()
     
     await broadcast_state_update()
     
     return StatusResponse(success=True, message="Marathon stopped")
 
 @app.post("/api/marathon/pause", response_model=StatusResponse)
-async def pause_marathon():
+async def pause_marathon(username: str = Depends(verify_auth_token)):
     """Pause/resume the current marathon."""
     if not marathon_state.is_running:
         raise HTTPException(status_code=400, detail="No marathon running")
@@ -540,8 +635,8 @@ async def emit_log_message(message_type: str, content: str, **kwargs):
         "timestamp": datetime.now().isoformat(),
         **kwargs,
     }
-    # Store in history for retrieval on page refresh
-    marathon_state._log_history.append(log_entry)
+    # Store in history with size limit
+    marathon_state.add_log(log_entry)
     # Also queue for SSE streaming
     await marathon_state._log_queue.put(log_entry)
 

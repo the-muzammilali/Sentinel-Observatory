@@ -10,10 +10,31 @@
 [![Gemini API](https://img.shields.io/badge/Gemini-3.0%20Flash-orange.svg)](https://ai.google.dev/)
 [![ScopeSim](https://img.shields.io/badge/ScopeSim-MICADO-green.svg)](https://scopesim.readthedocs.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
-[Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Demo](#-demo--testing) • [Documentation](#-documentation)
+[Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Deployment](#-deployment) • [Documentation](#-documentation)
 
 </div>
+
+---
+
+## 🚀 Quick Deployment (Hackathon Ready!)
+
+```bash
+# 1. Clone and configure
+git clone <repo-url> && cd sentinel-observatory
+cp .env.example .env
+nano .env  # Add your Gemini API key
+
+# 2. Start with Docker
+./start.sh
+
+# 3. Access
+# Frontend: http://localhost:3000
+# Login: sentinel / observatory2024
+```
+
+**📖 See [QUICK_START.md](QUICK_START.md) for detailed instructions**
 
 ---
 
