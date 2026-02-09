@@ -7,8 +7,9 @@ services:
       dockerfile: Dockerfile
     container_name: sentinel-backend
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # Remove port mapping - Coolify handles this via reverse proxy
+    expose:
+      - "8000"
     environment:
       # Authentication (override in production)
       - AUTH_USERNAME=${AUTH_USERNAME:-sentinel}
@@ -23,6 +24,13 @@ services:
       
       # Model configuration
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.0-flash}
+      
+      # Simulation configuration
+      - USE_SCOPESIM=${USE_SCOPESIM:-true}
+      - SIMULATION_SPEED=${SIMULATION_SPEED:-2}
+      - IMAGE_SIZE=${IMAGE_SIZE:-1024}
+      - FIELD_OF_VIEW=${FIELD_OF_VIEW:-60}
+      - NUM_STATIC_STARS=${NUM_STATIC_STARS:-500}
     volumes:
       # Persist data and logs
       - ./data:/app/data
@@ -52,8 +60,9 @@ services:
       dockerfile: Dockerfile
     container_name: sentinel-frontend
     restart: unless-stopped
-    ports:
-      - "3000:80"
+    # Remove port mapping - Coolify handles this via reverse proxy
+    expose:
+      - "80"
     depends_on:
       - backend
     networks:
