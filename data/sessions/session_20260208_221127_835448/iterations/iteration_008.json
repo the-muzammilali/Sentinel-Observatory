@@ -1,0 +1,257 @@
+{
+  "iteration": 8,
+  "timestamp": "2026-02-08T22:20:24.492509",
+  "simulated_time": "2026-02-09T02:11:37.835689",
+  "weather": {
+    "seeing": 0.9577600061893463,
+    "cloud_extinction": 0.2,
+    "observability": "GOOD"
+  },
+  "candidates": [
+    {
+      "id": "CAND_01",
+      "x": 435,
+      "y": 435,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 8,
+      "hypothesis": "Type Ia Supernova",
+      "history": [
+        {
+          "time": "2026-02-08T22:11:37.835689",
+          "magnitude": 18.5,
+          "confidence": 0.7,
+          "note": "First detection."
+        },
+        {
+          "time": "2026-02-08T22:41:37.835689",
+          "magnitude": 18.1,
+          "confidence": 0.8,
+          "note": "Second detection."
+        },
+        {
+          "time": "2026-02-08T23:11:37.835689",
+          "magnitude": 17.7,
+          "confidence": 0.9,
+          "note": "Third detection."
+        },
+        {
+          "time": "2026-02-08T23:41:37.835689",
+          "magnitude": 17.3,
+          "confidence": 0.95,
+          "note": "Fourth detection, alerted."
+        },
+        {
+          "time": "2026-02-09T00:11:37.835689",
+          "magnitude": 16.9,
+          "confidence": 0.98,
+          "note": "Fifth detection."
+        },
+        {
+          "time": "2026-02-09T00:41:37.835689",
+          "magnitude": 16.5,
+          "confidence": 0.99,
+          "note": "Sixth detection."
+        },
+        {
+          "time": "2026-02-09T01:11:37.835689",
+          "magnitude": 16.1,
+          "confidence": 0.99,
+          "note": "Seventh detection."
+        },
+        {
+          "time": "2026-02-09T01:41:37.835689",
+          "magnitude": 15.7,
+          "confidence": 0.99,
+          "note": "Eighth detection, continuing to brighten."
+        }
+      ]
+    },
+    {
+      "id": "CAND_02",
+      "x": 705,
+      "y": 310,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 8,
+      "hypothesis": "Type Ia Supernova",
+      "history": [
+        {
+          "time": "2026-02-08T22:11:37.835689",
+          "magnitude": 19.2,
+          "confidence": 0.6,
+          "note": "First detection."
+        },
+        {
+          "time": "2026-02-08T22:41:37.835689",
+          "magnitude": 18.8,
+          "confidence": 0.8,
+          "note": "Second detection."
+        },
+        {
+          "time": "2026-02-08T23:11:37.835689",
+          "magnitude": 18.4,
+          "confidence": 0.9,
+          "note": "Third detection."
+        },
+        {
+          "time": "2026-02-08T23:41:37.835689",
+          "magnitude": 18.0,
+          "confidence": 0.95,
+          "note": "Fourth detection."
+        },
+        {
+          "time": "2026-02-09T00:11:37.835689",
+          "magnitude": 17.6,
+          "confidence": 0.98,
+          "note": "Fifth detection, alerted."
+        },
+        {
+          "time": "2026-02-09T00:41:37.835689",
+          "magnitude": 17.2,
+          "confidence": 0.99,
+          "note": "Sixth detection."
+        },
+        {
+          "time": "2026-02-09T01:11:37.835689",
+          "magnitude": 16.8,
+          "confidence": 0.99,
+          "note": "Seventh detection."
+        },
+        {
+          "time": "2026-02-09T01:41:37.835689",
+          "magnitude": 16.4,
+          "confidence": 0.99,
+          "note": "Eighth detection, continuing to brighten."
+        }
+      ]
+    },
+    {
+      "id": "CAND_03",
+      "x": 525,
+      "y": 690,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 8,
+      "hypothesis": "Type Ia Supernova",
+      "history": [
+        {
+          "time": "2026-02-08T22:11:37.835689",
+          "magnitude": 18.8,
+          "confidence": 0.7,
+          "note": "First detection."
+        },
+        {
+          "time": "2026-02-08T22:41:37.835689",
+          "magnitude": 18.4,
+          "confidence": 0.8,
+          "note": "Second detection."
+        },
+        {
+          "time": "2026-02-08T23:11:37.835689",
+          "magnitude": 18.0,
+          "confidence": 0.9,
+          "note": "Third detection."
+        },
+        {
+          "time": "2026-02-08T23:41:37.835689",
+          "magnitude": 17.6,
+          "confidence": 0.95,
+          "note": "Fourth detection."
+        },
+        {
+          "time": "2026-02-09T00:11:37.835689",
+          "magnitude": 17.2,
+          "confidence": 0.98,
+          "note": "Fifth detection, alerted."
+        },
+        {
+          "time": "2026-02-09T00:41:37.835689",
+          "magnitude": 16.8,
+          "confidence": 0.99,
+          "note": "Sixth detection."
+        },
+        {
+          "time": "2026-02-09T01:11:37.835689",
+          "magnitude": 16.4,
+          "confidence": 0.99,
+          "note": "Seventh detection."
+        },
+        {
+          "time": "2026-02-09T01:41:37.835689",
+          "magnitude": 16.0,
+          "confidence": 0.99,
+          "note": "Eighth detection, continuing to brighten."
+        }
+      ]
+    },
+    {
+      "id": "CAND_04",
+      "x": 845,
+      "y": 205,
+      "status": "ALERTED",
+      "confidence": 0.99,
+      "observations": 8,
+      "hypothesis": "Type Ia Supernova",
+      "history": [
+        {
+          "time": "2026-02-08T22:11:37.835689",
+          "magnitude": 19.5,
+          "confidence": 0.6,
+          "note": "First detection."
+        },
+        {
+          "time": "2026-02-08T22:41:37.835689",
+          "magnitude": 19.1,
+          "confidence": 0.8,
+          "note": "Second detection."
+        },
+        {
+          "time": "2026-02-08T23:11:37.835689",
+          "magnitude": 18.7,
+          "confidence": 0.9,
+          "note": "Third detection."
+        },
+        {
+          "time": "2026-02-08T23:41:37.835689",
+          "magnitude": 18.3,
+          "confidence": 0.95,
+          "note": "Fourth detection."
+        },
+        {
+          "time": "2026-02-09T00:11:37.835689",
+          "magnitude": 17.9,
+          "confidence": 0.98,
+          "note": "Fifth detection, alerted."
+        },
+        {
+          "time": "2026-02-09T00:41:37.835689",
+          "magnitude": 17.5,
+          "confidence": 0.99,
+          "note": "Sixth detection."
+        },
+        {
+          "time": "2026-02-09T01:11:37.835689",
+          "magnitude": 17.1,
+          "confidence": 0.99,
+          "note": "Seventh detection."
+        },
+        {
+          "time": "2026-02-09T01:41:37.835689",
+          "magnitude": 16.7,
+          "confidence": 0.99,
+          "note": "Eighth detection, continuing to brighten."
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "action": "observe_again",
+    "reasoning": "**Analysis of Field_Primary - Iteration 8**\n\nOkay, let's take a look at the eighth iteration for Field_Primary. It's February 9th, 2026, and the weather looks pretty good: seeing is under an arcsecond and cloud extinction is low, so the data should be reliable. We have four candidates, CAND_01 through CAND_04, all flagged as ALERTED, just as expected. The previous action was `observe_again`, and that seems to have paid off.\n\nEach candidate is showing the same consistent brightening trend of 0.4 magnitudes per iteration.\n\n*   **CAND_01:** Starting from 18.5, and now at 16.1, we see a projected magnitude of 15.7. Clearly, this is going according to the Type Ia supernova hypothesis.\n*   **CAND_02:** It started at 19.2, and is now at 16.8, and projecting to 16.4. Another textbook example.\n*   **CAND_03:** This one began at 18.8, and is at 16.4 and projected to 16.0. It continues to brighten.\n*   **CAND_04:** Started at 19.5, now at 17.1, and projecting towards 16.7. This is looking very, very consistent.\n\nAll four are clearly present in the difference image, and their positions haven't shifted. No new transients of real interest. Brightness is consistently increasing, no new contenders, and that's great!\n\nGiven the consistent brightening, and positional stability of these four candidates, my confidence is extremely high at 0.99 that they are confirmed transients, and most likely Type Ia supernovae. We're on the right track! The next action is clearly to `observe_again`, and keep monitoring their light curves as they approach peak brightness. This whole iteration is just confirming what we already saw.\n\n\n",
+    "confidence": 0.99
+  },
+  "num_detections": 0,
+  "alerts_triggered": 1,
+  "ground_truth": null,
+  "image_filename": "iteration_008.png"
+}

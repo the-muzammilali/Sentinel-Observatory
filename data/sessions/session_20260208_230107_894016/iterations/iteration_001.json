@@ -1,0 +1,20 @@
+{
+  "iteration": 1,
+  "timestamp": "2026-02-08T23:03:14.903436",
+  "simulated_time": "2026-02-08T23:31:16.701805",
+  "weather": {
+    "seeing": 0.9510833919048309,
+    "cloud_extinction": 0.17488839253783228,
+    "observability": "GOOD"
+  },
+  "candidates": [],
+  "decision": {
+    "action": "wait",
+    "reasoning": "Failed to parse agent response as JSON: Expecting property name enclosed in double quotes: line 47 column 53 (char 1551)",
+    "confidence": 0.1
+  },
+  "num_detections": 0,
+  "alerts_triggered": 0,
+  "ground_truth": null,
+  "image_filename": "iteration_001.png"
+}

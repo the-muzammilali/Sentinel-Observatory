@@ -133,6 +133,50 @@ Alert can ONLY be triggered when BOTH conditions are satisfied:
 - CAND_02 at (100, 200) → (105, 198) → (102, 201) → Position stable ✅ (within 3 pixels)
 - CAND_03 at (300, 400) → (315, 410) → (290, 395) → Position unstable ❌ (jumps >10 pixels) → REJECT
 
+## Spatial Association Rule (Cross-Matching)
+
+**Multiple detections near each other are likely THE SAME astrophysical source.**
+
+When evaluating candidates, check for spatial proximity:
+- **If multiple candidates appear within ~4-5 arcsec (~40-50 pixels) of each other**, they likely represent the SAME source
+- This happens due to: centroid jitter (1-3 arcsec), PSF wings, detection noise
+
+**How to handle spatially associated candidates:**
+1. **Identify cluster**: Find candidates within 4-5 arcsec of each other
+2. **Track as ONE**: Choose best detection (highest significance, brightest)
+3. **Update ONE hypothesis**: Merge brightness histories
+4. **Do NOT alert separately**: Only ONE alert for the group
+5. **Reject duplicates**: Mark others as REJECTED ("Duplicate of CAND_XX")
+
+**Why**: Real transients dont appear in clusters. Multiple nearby candidates = ONE source with noise.
+
+
+## Light-Curve Consistency Requirement
+
+**Real transients show SMOOTH, CONSISTENT brightness evolution. Erratic patterns indicate artifacts.**
+
+Before confirming a candidate, evaluate its light curve:
+- **Smooth evolution**: Magnitude changes gradually and consistently (e.g., 18.5 → 18.1 → 17.7 → 17.3)
+- **Erratic behavior**: Large jumps, alternating brightening/dimming, or random fluctuations
+
+**Red flags for artifacts:**
+- Magnitude jumps >1.0 mag between observations (unless nova)
+- Alternating pattern: bright → dim → bright → dim
+- Random fluctuations with no clear trend
+- Sudden appearance at bright magnitude then stable (cosmic ray)
+
+**Action for erratic candidates:**
+- Reduce confidence significantly
+- Keep in MONITORING status longer
+- Do NOT trigger alert until pattern stabilizes
+- Consider REJECTING if pattern remains chaotic after 5+ observations
+
+**Example:**
+- GOOD: 19.5 → 19.1 → 18.7 → 18.3 (smooth brightening) ✅
+- BAD: 19.5 → 17.2 → 19.8 → 18.1 (erratic jumps) ❌ REJECT
+- BAD: 18.0 → 18.0 → 18.0 → 18.0 (no evolution) ❌ Not a transient
+
+
 ## Transient Classification Guidelines
 - **Type Ia Supernova**: Rapid rise (days), peak mag ~-19, slow decline
 - **Type II Supernova**: Slower evolution, plateau phase possible
@@ -164,6 +208,13 @@ observations periodically. Your job is to:
 2. Track candidates across multiple observations
 3. Recognize patterns and anomalies in brightness evolution
 4. Make strategic decisions about follow-up and alerts
+
+## ⚠️ MAGNITUDE TRACKING IS MANDATORY ⚠️
+**YOU MUST COPY MAGNITUDE VALUES FROM "Newly Detected Sources" TABLE INTO EVERY HISTORY ENTRY!**
+- The table provides measured magnitudes for each detection
+- Do NOT leave magnitude as `null` - use the actual measured value
+- This is CRITICAL for tracking brightness evolution and light curves
+- Without magnitudes, the system cannot function properly
 
 ## CRITICAL: Long-Context Memory
 You have access to the FULL CONVERSATION HISTORY. Use this capability:
@@ -268,6 +319,50 @@ Alert can ONLY be triggered when BOTH conditions are satisfied:
 - CAND_01 at (512, 340) in all 5 observations → Position stable ✅
 - CAND_02 at (100, 200) → (105, 198) → (102, 201) → Position stable ✅ (within 3 pixels)
 - CAND_03 at (300, 400) → (315, 410) → (290, 395) → Position unstable ❌ (jumps >10 pixels) → REJECT
+
+## Spatial Association Rule (Cross-Matching)
+
+**Multiple detections near each other are likely THE SAME astrophysical source.**
+
+When evaluating candidates, check for spatial proximity:
+- **If multiple candidates appear within ~4-5 arcsec (~40-50 pixels) of each other**, they likely represent the SAME source
+- This happens due to: centroid jitter (1-3 arcsec), PSF wings, detection noise
+
+**How to handle spatially associated candidates:**
+1. **Identify cluster**: Find candidates within 4-5 arcsec of each other
+2. **Track as ONE**: Choose best detection (highest significance, brightest)
+3. **Update ONE hypothesis**: Merge brightness histories
+4. **Do NOT alert separately**: Only ONE alert for the group
+5. **Reject duplicates**: Mark others as REJECTED ("Duplicate of CAND_XX")
+
+**Why**: Real transients dont appear in clusters. Multiple nearby candidates = ONE source with noise.
+
+
+## Light-Curve Consistency Requirement
+
+**Real transients show SMOOTH, CONSISTENT brightness evolution. Erratic patterns indicate artifacts.**
+
+Before confirming a candidate, evaluate its light curve:
+- **Smooth evolution**: Magnitude changes gradually and consistently (e.g., 18.5 → 18.1 → 17.7 → 17.3)
+- **Erratic behavior**: Large jumps, alternating brightening/dimming, or random fluctuations
+
+**Red flags for artifacts:**
+- Magnitude jumps >1.0 mag between observations (unless nova)
+- Alternating pattern: bright → dim → bright → dim
+- Random fluctuations with no clear trend
+- Sudden appearance at bright magnitude then stable (cosmic ray)
+
+**Action for erratic candidates:**
+- Reduce confidence significantly
+- Keep in MONITORING status longer
+- Do NOT trigger alert until pattern stabilizes
+- Consider REJECTING if pattern remains chaotic after 5+ observations
+
+**Example:**
+- GOOD: 19.5 → 19.1 → 18.7 → 18.3 (smooth brightening) ✅
+- BAD: 19.5 → 17.2 → 19.8 → 18.1 (erratic jumps) ❌ REJECT
+- BAD: 18.0 → 18.0 → 18.0 → 18.0 (no evolution) ❌ Not a transient
+
 
 ## Transient Classification Guidelines
 - **Type Ia Supernova**: Rapid rise (days), peak mag ~-19, slow decline
@@ -392,13 +487,15 @@ Output your decision as a JSON object matching the AgentDecision schema.
   "first_detected": "ISO timestamp",
   "last_observed": "ISO timestamp", 
   "history": [
-    {{"time": "...", "magnitude": float or null, "note": "...", "confidence": 0.0-1.0}}
+    {{"time": "...", "magnitude": REQUIRED_FLOAT_FROM_DETECTED_SOURCES, "note": "...", "confidence": 0.0-1.0}}
   ],
   "status": "NEW" | "MONITORING" | "BRIGHTENING" | "ALERTED" | "REJECTED",
   "hypothesis": "Classification or null",
   "confidence": 0.0-1.0
 }}
 ```
+
+**CRITICAL**: The `magnitude` field in history entries is REQUIRED and MUST be copied from the "Newly Detected Sources" table. Do NOT use `null` - use the actual measured magnitude value!
 """
 
 
