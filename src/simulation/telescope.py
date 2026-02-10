@@ -75,6 +75,18 @@ class TelescopeCamera:
         try:
             import scopesim as sim
             
+            # Configure ScopeSim to find instrument packages
+            # In Docker: /app/inst_pkgs, locally: ./inst_pkgs
+            inst_pkgs_path = Path("/app/inst_pkgs")
+            if not inst_pkgs_path.exists():
+                inst_pkgs_path = Path("inst_pkgs")
+            
+            if inst_pkgs_path.exists():
+                sim.rc.__search_path__.insert(0, str(inst_pkgs_path.resolve()))
+                logger.info(f"ScopeSim search path set to: {inst_pkgs_path.resolve()}")
+            else:
+                logger.warning("inst_pkgs directory not found, ScopeSim may fail to load instruments")
+            
             logger.info(f"Loading {self.config.instrument} optical train...")
             self._optical_train = sim.OpticalTrain(self.config.instrument)
             self._initialized = True
