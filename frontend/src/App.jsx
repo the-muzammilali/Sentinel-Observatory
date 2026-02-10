@@ -8,7 +8,8 @@ import Playback from './pages/Playback'
 import Settings from './pages/Settings'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+// Hardcode to empty string to ensure relative path usage with Nginx proxy
+const API_BASE_URL = '' // import.meta.env.VITE_API_URL || ''
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)

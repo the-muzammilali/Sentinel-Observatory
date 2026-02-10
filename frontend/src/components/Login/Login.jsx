@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import './Login.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// Hardcode to empty string to ensure relative path usage with Nginx proxy
+const API_BASE_URL = ''; // import.meta.env.VITE_API_URL || '';
 
 export default function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState('');
