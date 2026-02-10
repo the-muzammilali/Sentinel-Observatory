@@ -39,6 +39,7 @@ services:
       - ./inst_pkgs:/app/inst_pkgs:ro
     networks:
       - sentinel-network
+      - coolify
     labels:
       # Traefik labels for Coolify routing
       - "traefik.enable=true"
@@ -75,6 +76,7 @@ services:
       - backend
     networks:
       - sentinel-network
+      - coolify
     labels:
       # Traefik labels for Coolify routing
       - "traefik.enable=true"
@@ -98,6 +100,10 @@ services:
 networks:
   sentinel-network:
     driver: bridge
+  # Connect to Coolify's proxy network
+  coolify:
+    external: true
+    name: coolify
 
 volumes:
   data:
