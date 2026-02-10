@@ -8,7 +8,7 @@ import Playback from './pages/Playback'
 import Settings from './pages/Settings'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -137,8 +137,8 @@ function App() {
       try {
         // Determine WebSocket protocol and host
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const apiUrl = API_BASE_URL.replace('https://', '').replace('http://', '')
-        const wsUrl = `${wsProtocol}//${apiUrl}/ws/marathon?token=${authToken}`
+        // Use current host for WebSocket connection (handled by Nginx proxy)
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/marathon?token=${authToken}`
         
         ws = new WebSocket(wsUrl)
 
