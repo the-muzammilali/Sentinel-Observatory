@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Brain, ChevronDown, ChevronRight, Zap, Clock } from 'lucide-react'
+import { API_BASE_URL, STREAM_BASE_URL } from '../../config'
 import './AgentLog.css'
 
 function AgentLog({ marathonState }) {
@@ -103,7 +104,7 @@ function AgentLog({ marathonState }) {
     let eventSource = null
     
     try {
-      eventSource = new EventSource('http://localhost:8000/stream/agent-log')
+      eventSource = new EventSource(`${STREAM_BASE_URL}/stream/agent-log`)
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data)
@@ -130,7 +131,7 @@ function AgentLog({ marathonState }) {
       if (!marathonState.isRunning || historyFetchedRef.current) return
       
       try {
-        const response = await fetch('http://localhost:8000/api/marathon/logs')
+        const response = await fetch(`${API_BASE_URL}/api/marathon/logs`)
         if (response.ok) {
           historyFetchedRef.current = true
           const data = await response.json()

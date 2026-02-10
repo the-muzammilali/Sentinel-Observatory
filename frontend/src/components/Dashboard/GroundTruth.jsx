@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle2, XCircle, Target } from 'lucide-react'
+import { API_BASE_URL } from '../../config'
 import Sparkline from '../Visualization/Sparkline'
 import './GroundTruth.css'
 
@@ -27,7 +28,7 @@ function GroundTruth({ marathonState }) {
 
     const fetchMetrics = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/ground-truth')
+        const response = await fetch(`${API_BASE_URL}/api/ground-truth`)
         if (response.ok) {
           const data = await response.json()
           setMetrics(data)

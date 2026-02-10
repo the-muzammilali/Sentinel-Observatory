@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { API_BASE_URL } from '../config'
 import TelescopeView from '../components/Dashboard/TelescopeView'
 import AgentLog from '../components/Dashboard/AgentLog'
 import CandidateList from '../components/Dashboard/CandidateList'
@@ -25,7 +26,7 @@ function Dashboard({ marathonState, contextState, resetKey }) {
   useEffect(() => {
     const fetchIterations = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/iterations')
+        const response = await fetch(`${API_BASE_URL}/api/iterations`)
         if (response.ok) {
           const data = await response.json()
           setFetchedIterations(data.iterations || [])

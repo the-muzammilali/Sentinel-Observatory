@@ -21,6 +21,7 @@ import {
   Move,
   RefreshCw,
 } from 'lucide-react'
+import { API_BASE_URL } from '../config'
 import './Playback.css'
 
 function Playback() {
@@ -47,7 +48,7 @@ function Playback() {
   useEffect(() => {
     const fetchSessions = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/sessions')
+        const response = await fetch(`${API_BASE_URL}/api/sessions`)
         if (response.ok) {
           const data = await response.json()
           setSessions(data.sessions || [])
@@ -66,7 +67,7 @@ function Playback() {
     const fetchIterationData = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8000/api/sessions/${selectedSession.session_id}/iterations/${currentIteration}`
+          `${API_BASE_URL}/api/sessions/${selectedSession.session_id}/iterations/${currentIteration}`
         )
         if (response.ok) {
           const data = await response.json()
@@ -86,7 +87,7 @@ function Playback() {
     const preloadAllImages = async () => {
       const images = {}
       for (let i = 1; i <= selectedSession.total_iterations; i++) {
-        const url = `http://localhost:8000/api/sessions/${selectedSession.session_id}/iterations/${i}/image`
+        const url = `${API_BASE_URL}/api/sessions/${selectedSession.session_id}/iterations/${i}/image`
         const img = new Image()
         img.src = url
         images[i] = url
@@ -99,7 +100,7 @@ function Playback() {
   // Get current image URL from preloaded cache
   const currentImageUrl = selectedSession ? 
     preloadedImages[currentIteration] || 
-    `http://localhost:8000/api/sessions/${selectedSession.session_id}/iterations/${currentIteration}/image` 
+    `${API_BASE_URL}/api/sessions/${selectedSession.session_id}/iterations/${currentIteration}/image` 
     : null
 
   // Auto-advance playback

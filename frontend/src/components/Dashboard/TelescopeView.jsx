@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Camera, ZoomIn, ZoomOut, Layers, RefreshCw, Move } from 'lucide-react'
+import { API_BASE_URL } from '../../config'
 import './TelescopeView.css'
 
 function TelescopeView({ marathonState, contextState, currentIteration }) {
@@ -34,7 +35,7 @@ function TelescopeView({ marathonState, contextState, currentIteration }) {
       const type = showDiff ? 'diff' : 'current'
       // Add timestamp to bust cache and prevent stale images from previous marathons
       const timestamp = Date.now()
-      const url = `http://localhost:8000/api/iteration/${currentIteration}/image?type=${type}&t=${timestamp}`
+      const url = `${API_BASE_URL}/api/iteration/${currentIteration}/image?type=${type}&t=${timestamp}`
       const response = await fetch(url)
       
       if (response.ok) {

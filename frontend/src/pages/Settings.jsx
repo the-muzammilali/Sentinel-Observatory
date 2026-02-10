@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Settings as SettingsIcon, Save, RotateCcw, Zap, Globe, Cpu, Server } from 'lucide-react'
+import { API_BASE_URL } from '../config'
 import './Settings.css'
 
 const DEFAULT_CONFIG = {
@@ -14,7 +15,7 @@ const DEFAULT_CONFIG = {
   confirm_threshold: 0.8,
   weather_enabled: true,
   auto_save_executions: true,
-  api_url: 'http://localhost:8000',
+  api_url: API_BASE_URL,
 }
 
 // Load saved config from localStorage
@@ -243,7 +244,7 @@ function Settings() {
                 type="text"
                 value={config.api_url}
                 onChange={(e) => handleChange('api_url', e.target.value)}
-                placeholder="http://localhost:8000"
+                placeholder={API_BASE_URL}
               />
             </div>
 
