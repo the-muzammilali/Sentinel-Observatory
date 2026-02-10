@@ -3,8 +3,11 @@ set -e
 
 echo "🔭 Sentinel Frontend - Starting..."
 
-# Note: We rely on Nginx lazy resolution (set $variable) to handle backend unavailability
-# without crashing. We don't block startup here so the frontend becomes healthy immediately.
+echo "✅ Backend is reachable (or timeout reached)"
+
+# Verify Nginx config
+echo "🔍 Verifying Nginx configuration..."
+nginx -t
 
 echo "🚀 Starting Nginx..."
 

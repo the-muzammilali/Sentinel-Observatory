@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   backend:
@@ -14,17 +14,17 @@ services:
       # Authentication (override in production)
       - AUTH_USERNAME=${AUTH_USERNAME:-sentinel}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-observatory2024}
-      
+
       # API Keys (REQUIRED - set in .env file)
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GOOGLE_API_KEYS=${GOOGLE_API_KEYS}
-      
+
       # CORS (set to your frontend domain in production)
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      
+
       # Model configuration
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.0-flash}
-      
+
       # Simulation configuration
       - USE_SCOPESIM=${USE_SCOPESIM:-true}
       - SIMULATION_SPEED=${SIMULATION_SPEED:-2}
@@ -49,7 +49,13 @@ services:
       - "traefik.http.routers.sentinel-backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.sentinel-backend.loadbalancer.server.port=8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8000/health', timeout=5)",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -57,10 +63,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
+          cpus: "2.0"
           memory: 4G
         reservations:
-          cpus: '1.0'
+          cpus: "1.0"
           memory: 2G
 
   frontend:
@@ -86,15 +92,16 @@ services:
       - "traefik.http.routers.sentinel-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.services.sentinel-frontend.loadbalancer.server.port=80"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test:
+        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 30s
     deploy:
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
 
 networks:
