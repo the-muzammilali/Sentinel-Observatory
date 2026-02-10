@@ -35,8 +35,6 @@ services:
       # Persist data and logs
       - ./data:/app/data
       - ./logs:/app/logs
-      # Mount instrument packages (read-only)
-      - ./inst_pkgs:/app/inst_pkgs:ro
     networks:
       - sentinel-network
       - coolify

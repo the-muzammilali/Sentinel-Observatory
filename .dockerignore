@@ -70,3 +70,7 @@ temp/
 *.png
 *.jpg
 *.jpeg
+
+# Exception: include ScopeSim instrument packages (needed at runtime)
+!inst_pkgs/
+!inst_pkgs/**

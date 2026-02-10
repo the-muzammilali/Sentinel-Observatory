@@ -44,6 +44,9 @@ WORKDIR /app
 # Copy Python packages from builder
 COPY --from=builder /root/.local /home/sentinel/.local
 
+# Copy instrument packages (ScopeSim MICADO/ELT/Armazones)
+COPY --chown=sentinel:sentinel inst_pkgs /app/inst_pkgs
+
 # Copy application code
 COPY --chown=sentinel:sentinel . .
 
