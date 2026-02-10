@@ -14,6 +14,11 @@ WORKDIR /app
 # Copy requirements
 COPY requirements.txt .
 
+# Add local bin to PATH for builder to suppress warnings
+ENV PATH=/root/.local/bin:$PATH
+
+# Install Python dependencies
+
 # Install Python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
 
